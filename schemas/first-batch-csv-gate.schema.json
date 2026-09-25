@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "connectorCode",
+    "status",
+    "firstBatchMaterialIds",
+    "completedMaterialIds",
+    "validCsvMaterialIds",
+    "unknownMaterialIds",
+    "errorCode",
+    "message"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "connectorCode": {
+      "const": "rpa.conn.juliang.qc.material.analysis.video.live.diagnosis"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "passed",
+        "blocked",
+        "unconfirmed"
+      ]
+    },
+    "firstBatchMaterialIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "completedMaterialIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "validCsvMaterialIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "unknownMaterialIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 3,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "errorCode": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "message": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

@@ -42,6 +42,10 @@
       "destination": "schemas/analysis-handoff.schema.json"
     },
     {
+      "source": "schemas/first-batch-csv-gate.schema.json",
+      "destination": "schemas/first-batch-csv-gate.schema.json"
+    },
+    {
       "source": "schemas/generated-scripts.schema.json",
       "destination": "schemas/generated-scripts.schema.json"
     },
@@ -138,6 +142,10 @@
       "destination": "schemas/workbench-operation-status.schema.json"
     },
     {
+      "source": "scripts/date_policy.py",
+      "destination": "scripts/date_policy.py"
+    },
+    {
       "source": "scripts/errors.py",
       "destination": "scripts/errors.py"
     },
@@ -160,6 +168,10 @@
     {
       "source": "scripts/qianchuan_script_acquisition_field_registry.py",
       "destination": "scripts/qianchuan_script_acquisition_field_registry.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_gate.py",
+      "destination": "scripts/qianchuan_script_acquisition_gate.py"
     },
     {
       "source": "scripts/qianchuan_script_acquisition_identity.py",

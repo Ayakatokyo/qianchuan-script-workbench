@@ -16,6 +16,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
+from date_policy import validate_period
 from errors import ContractError
 from qianchuan_script_acquisition_contracts import AcquisitionRequest
 
@@ -105,6 +106,7 @@ def resolve_advertiser_id(request: AcquisitionRequest, rpa_gateway: Any, transpo
     live = request.live_acquire
     if live is None:
         raise ContractError("resolve_advertiser_id requires liveAcquire")
+    validate_period(request.period["startDate"], request.period["endDate"])
     try:
         detail = rpa_gateway.connector_detail()
         accounts = rpa_gateway.list_accounts(detail)
@@ -386,6 +388,7 @@ def _validate_report_completeness(payload: Any, record_count: int) -> None:
 def fetch_material_report(request: AcquisitionRequest, output_dir: Path, transport: Any, *, environ: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
     if request.live_acquire is None:
         raise ContractError("fetch_material_report requires liveAcquire")
+    validate_period(request.period["startDate"], request.period["endDate"])
     context = RuntimeContext.from_environ(os.environ if environ is None else environ)
     live = request.live_acquire
     business_params = _business_params(live.advertiser_id, request.period["startDate"], request.period["endDate"])

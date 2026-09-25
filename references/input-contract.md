@@ -1,5 +1,21 @@
 # 输入契约
 
+## 派生入参同步与实时校验
+
+派生 Skill 继承同一表单及映射，表单、提示模板、输入 Schema 和调用代码一起更新。`describe-acquire` 返回 `derivedInputMapping`；`preview-acquire` 可离线检查本次填写值。使用本次实际输入生成请求，不能引用固化流程时保存的客户账号或旧日期。
+
+| 表单字段 | 内部入参 | 必须保留的约束 |
+|---|---|---|
+| `api_shop` | `liveAcquire.apiShop` | `api_shop` 选择器，`application_id: OCEANENGINE`；授权项取 `extra.shop_id` |
+| `rpa_shop` | `liveAcquire.rpaShop` | `rpa_shop` 选择器，`application_id: RPA_JULIANG_QC`、`value_format: both`；与 API 店铺分域，广告主由实时授权关系解析 |
+| `date_range` | `period.startDate/endDate` | `YYYY-MM-DD`，`max_policy: t_plus_2`，北京时间前天及以前，开始不晚于结束 |
+| `top_n` | `liveAcquire.topN` | 正整数，默认 10；只控制本地选材数量，不截断完整报表 |
+| `material_filter_sort` | `liveAcquire.materialFilterSort` | 可选，归一化为已注册字段的排序与 filters；仅作用于完整报表后的本地选材 |
+
+实时日期由 `scripts/date_policy.py::validate_period` 在网络请求前验证；单独复用入口为 `python "$SKILL_ROOT/scripts/date_policy.py" --start-date YYYY-MM-DD --end-date YYYY-MM-DD`，非零退出必须阻断后续请求。非法值不会被自动修正。离线 `verifiedRun` 导入只验证历史周期格式和顺序，不套用实时可用日。
+
+派生 Skill 必须同步首批 CSV 门禁及恢复行为，不能把 `rpaPaused` 当可继续的 `partialFailed`。暂停后先核实旧任务并检查参数；修正后用新的运行目录验证首批。第二阶段分析、生成、改写的业务入参保持与采集入参分开。
+
 阶段一取数先校验 `qianchuan-script-acquisition-input.schema.json`。必须恰好选择实时授权采集 `liveAcquire` 或离线验证运行 `verifiedRun`；不得把授权凭证写入输入 JSON、命令行、文件、日志或收据。`apiShop` 与 `rpaShop` 来自不同授权域，数字广告主 ID 从 RPA 授权关系解析并核对，不让用户手工拼接内部 ID。
 
 ```bash

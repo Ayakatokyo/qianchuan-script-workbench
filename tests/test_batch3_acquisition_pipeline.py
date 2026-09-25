@@ -1,5 +1,7 @@
 import copy
+import csv
 import hashlib
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -11,6 +13,16 @@ from short_video_foundation.qianchuan_script_acquisition.contracts import Acquis
 from short_video_foundation.qianchuan_script_acquisition.pipeline import acquire_scripts, continue_acquire_scripts
 from short_video_foundation.qianchuan_script_acquisition.report_client import ReportClientError
 from short_video_foundation.qianchuan_script_acquisition.rpa_client import RpaTaskResult
+
+
+def csv_files(records):
+    """Successful test tasks return the actual transport format, not only JSON."""
+    stream = io.StringIO()
+    writer = csv.DictWriter(stream, fieldnames=["recordType", "materialId", "materialName", "scriptInfo"], delimiter="\x01")
+    writer.writeheader()
+    for record in records:
+        writer.writerow({**record, "scriptInfo": json.dumps(record.get("scriptInfo", {}), ensure_ascii=False)})
+    return ({"fileName": "details.csv", "content": stream.getvalue().encode()},)
 
 
 def live_request(top_n=3):
@@ -78,7 +90,7 @@ class RecordingRpaGateway:
             "materialName": f"name-{material_id}",
             "scriptInfo": self.script_infos.get(material_id, {"text": "共享参考脚本" if material_id != "m1" else "参考脚本一"}),
         },)
-        return RpaTaskResult(task_group_id, outcome, records=records)
+        return RpaTaskResult(task_group_id, outcome, files=csv_files(records), records=records)
 
 
 class WaveRecordingRpaGateway:
@@ -130,16 +142,13 @@ class WaveRecordingRpaGateway:
                 self.terminal_material_ids.append(material_id)
             if self.outcomes[material_id] == "failed":
                 return RpaTaskResult(task_group_id, "failed")
-            return RpaTaskResult(
-                task_group_id,
-                self.outcomes[material_id],
-                records=({
+            records = ({
                     "recordType": "script_analysis",
                     "materialId": material_id,
                     "materialName": f"name-{material_id}",
                     "scriptInfo": {"text": f"脚本-{material_id}"},
-                },),
-            )
+                },)
+            return RpaTaskResult(task_group_id, self.outcomes[material_id], files=csv_files(records), records=records)
         finally:
             with self._lock:
                 self.active -= 1
@@ -296,7 +305,10 @@ class Batch3AcquisitionPipelineTests(unittest.TestCase):
         )
         worker.start()
         try:
-            self.assertTrue(fourth_submitted.wait(timeout=3))
+            deadline = time.monotonic() + 2
+            while not list((output / "facts" / "scripts").glob("*.json")) and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertFalse(fourth_submitted.is_set())
             fact = next((output / "facts" / "scripts").glob("*.json"))
             self.assertEqual(json.loads(fact.read_text(encoding="utf-8"))["materialId"], "m1")
             self.assertTrue({"m2", "m3"}.isdisjoint(gateway.terminal))
@@ -477,11 +489,11 @@ class Batch3AcquisitionPipelineTests(unittest.TestCase):
                     record = dict(result.records[0])
                     record["materialName"] = "name-m1"
                     record["scriptInfo"] = {"formula": {"labels": ["错配公式"]}, "text": "错配正文"}
-                    return RpaTaskResult(task_group_id, "completed", records=(record,))
+                    return RpaTaskResult(task_group_id, "completed", files=csv_files((record,)), records=(record,))
                 if material_id == "m2" and attempt == 2:
                     record = dict(result.records[0])
                     record["scriptInfo"] = {"formula": {"labels": ["匹配公式"]}, "detail": {"labels": ["开场"]}, "data": [], "text": "共享参考脚本"}
-                    return RpaTaskResult(task_group_id, "completed", records=(record,))
+                    return RpaTaskResult(task_group_id, "completed", files=csv_files((record,)), records=(record,))
                 return result
 
         candidates = self.candidates + [
@@ -548,9 +560,10 @@ class Batch3AcquisitionPipelineTests(unittest.TestCase):
             def poll(self, task_group_id):
                 material_id, _attempt = self._tasks[task_group_id]
                 if material_id == "m3":
-                    return RpaTaskResult(task_group_id, "completed", records=({
+                    records = ({
                         "recordType": "material_detail", "materialId": "m3", "materialName": "name-m3",
-                    },))
+                    },)
+                    return RpaTaskResult(task_group_id, "completed", files=csv_files(records), records=records)
                 return super().poll(task_group_id)
 
         candidates = [

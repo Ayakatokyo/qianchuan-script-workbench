@@ -11,7 +11,7 @@
 - 独立回归：`python3 tools/test.py`；开发依赖见 `requirements-dev.txt`。
 - 构建本包：`python3 tools/build.py`，输出 `dist/qianchuan-script-workbench.zip`。
 - 可从任意工作目录执行打包器的绝对路径；`--dist-dir` 可指定新的本地产物目录。
-- 正式发行清单：[packaging.json](packaging.json)，只包含显式列出的 57 个文件；ZIP 内保留 `qianchuan-script-workbench/` 根目录。
+- 正式发行清单：[packaging.json](packaging.json)，只包含显式列出的 60 个文件；ZIP 内保留 `qianchuan-script-workbench/` 根目录。
 
 ## 维护与归属
 

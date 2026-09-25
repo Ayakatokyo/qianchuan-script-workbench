@@ -124,13 +124,11 @@ def poll_existing_task(gateway: Any, task_group_id: str, *, clock=time.monotonic
         sleep(min(1.0, max(0.0, deadline - clock())))
 
 
-def invoke_once(gateway: Any, detail: dict[str, Any], rpa_shop: str, params: dict[str, Any], *, clock=time.monotonic, sleep=time.sleep, timeout_sec: float = 3600) -> RpaTaskResult:
-    validated = validate_business_params(detail, params)
-    gateway.authorize(rpa_shop)
-    task_id = gateway.submit(detail, rpa_shop, validated)
-    if not isinstance(task_id, str) or not task_id:
-        raise RpaTaskError("RPA submit returned no task_group_id")
-    return poll_existing_task(gateway, task_id, clock=clock, sleep=sleep, timeout_sec=timeout_sec)
+def invoke_once(gateway: Any, detail: dict[str, Any], rpa_shop: str, params: dict[str, Any], **options: Any) -> RpaTaskResult:
+    # This package has one detail workflow. Its historical convenience helper
+    # must enforce the same durable gate and date policy as the public wrapper.
+    from qianchuan_script_acquisition_rpa_client import invoke_once as guarded_invoke
+    return guarded_invoke(gateway, detail, rpa_shop, params, **options)
 
 
 class RpaGateway:

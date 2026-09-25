@@ -8,6 +8,8 @@
     "state"
   ],
   "properties": {
+    "message": {"type": "string"},
+    "gatePath": {"const": "first-batch-csv-gate.json"},
     "schemaVersion": {
       "const": 1
     },
@@ -28,6 +30,7 @@
         "rpaProcessing",
         "sourcePackBuilding",
         "sourcePackVerifying",
+        "rpaPaused",
         "ready",
         "partialFailed",
         "failed",

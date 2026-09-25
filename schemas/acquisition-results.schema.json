@@ -6,7 +6,8 @@
   "properties": {
     "schemaVersion": {"const": 1},
     "runId": {"type": "string", "minLength": 1},
-    "status": {"enum": ["ready", "partialFailed"]},
+    "status": {"enum": ["ready", "partialFailed", "rpaPaused"]},
+    "firstBatchCsvGate": {"type": "object"},
     "stopReason": {"type": "string"},
     "counts": {
       "type": "object",

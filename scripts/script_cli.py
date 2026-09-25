@@ -14,6 +14,7 @@ import uuid
 from typing import Any, Mapping
 
 from qianchuan_script_acquisition_contracts import AcquisitionRequest
+from qianchuan_script_acquisition_gate import RpaPausedError, assert_detail_rpa_not_paused
 from qianchuan_script_acquisition_field_registry import QueryError, load_field_registry
 from qianchuan_script_acquisition_pipeline import (
     OUTCOMES_FILENAME,
@@ -145,6 +146,15 @@ def _status(path: Path) -> str | None:
     return str(payload.get("state") or payload.get("status") or "") or None
 
 
+def _acquisition_reply(output_dir: Path, result: Path) -> dict[str, Any]:
+    reply = {"status": _status(output_dir) or "ready", "runId": output_dir.name, "outputPath": str(result)}
+    if reply["status"] == "rpaPaused":
+        status = _read_json(output_dir / "status.json")
+        reply.update({key: status[key] for key in ("errorCode", "message", "gatePath")})
+        reply["firstBatchCsvGate"] = _read_json(output_dir / "first-batch-csv-gate.json")
+    return reply
+
+
 def _normalize_acquisition_payload(payload: dict[str, Any]) -> dict[str, Any]:
     def selected_shop_id(value: Any) -> Any:
         if isinstance(value, Mapping):
@@ -207,8 +217,8 @@ def _describe_acquire(_args: argparse.Namespace) -> dict[str, Any]:
         "schemaVersion": 1,
         "status": "ready",
         "requiredInputs": [
-            {"path": "period.startDate", "type": "date", "required": True},
-            {"path": "period.endDate", "type": "date", "required": True},
+            {"path": "period.startDate", "type": "date", "required": True, "maxPolicy": "t_plus_2", "timezone": "Asia/Shanghai"},
+            {"path": "period.endDate", "type": "date", "required": True, "maxPolicy": "t_plus_2", "timezone": "Asia/Shanghai"},
             {"path": "liveAcquire.apiShop", "type": "string", "required": True},
             {"path": "liveAcquire.rpaShop", "type": "string", "required": True},
             {"path": "liveAcquire.topN", "type": "integer", "required": False, "default": 10, "minimum": 1},
@@ -237,6 +247,12 @@ def _describe_acquire(_args: argparse.Namespace) -> dict[str, Any]:
         ],
         "reportOrderBy": {"fieldId": "stat_cost_for_roi2", "direction": "desc", "userSelectionApplied": False},
         "previewCommand": "preview-acquire --input <json-file>",
+        "derivedInputMapping": {
+            "api_shop": "liveAcquire.apiShop", "rpa_shop": "liveAcquire.rpaShop",
+            "date_range": "period", "top_n": "liveAcquire.topN",
+            "material_filter_sort": "liveAcquire.materialFilterSort",
+        },
+        "firstBatchCsvGate": {"maxBatchSize": 3, "requiresActualCsv": True, "noValidCsv": "rpaPaused", "unknownResult": "rpaPaused"},
         "externalCalls": False,
     }
 
@@ -356,7 +372,7 @@ def _acquire(args: argparse.Namespace) -> dict[str, Any]:
     except ReportClientError as exc:
         raise CliError("advertiser_authorization_failed", str(exc)) from exc
     result = acquire_scripts(request, output_dir, report_gateway, rpa_gateway, registry=load_field_registry(registry_path))
-    return {"status": _status(output_dir) or "ready", "runId": run_id, "outputPath": str(result)}
+    return _acquisition_reply(output_dir, result)
 
 
 def _external_run_dir(value: Path) -> Path:
@@ -383,6 +399,7 @@ def _continue_acquire(args: argparse.Namespace) -> dict[str, Any]:
     if request.live_acquire is None:
         raise CliError("continue_requires_live_acquire", "continue-acquire requires liveAcquire input")
     output_dir = _external_run_dir(args.run_dir)
+    assert_detail_rpa_not_paused(output_dir)
     if request.live_acquire.advertiser_id is None:
         try:
             query = _read_json(output_dir / "source-data" / "resolved-query-spec.json")
@@ -423,9 +440,7 @@ def _continue_acquire(args: argparse.Namespace) -> dict[str, Any]:
     rpa_gateway = RpaGateway(transport=transport, environ=context.environ)
     result = continue_acquire_scripts(request, output_dir, rpa_gateway, registry=registry)
     return {
-        "status": _status(output_dir) or "ready",
-        "runId": output_dir.name,
-        "outputPath": str(result),
+        **_acquisition_reply(output_dir, result),
         "reportRowCount": len(rows),
         "reportSnapshotSha256": receipt["snapshotSha256"],
     }
@@ -581,12 +596,59 @@ def _publish_rewrite(args: argparse.Namespace) -> dict[str, Any]:
     return {"status": _status(analysis_dir) or "completed", "operation": "rewrite", "runId": run_id, "analysisId": analysis_id, "outputPath": str(result)}
 
 
+def _verify_csv_gate(path: Path, outcomes: dict[str, Any]) -> dict[str, Any]:
+    gate = _read_json(path / "first-batch-csv-gate.json")
+    validate_payload(gate, "first-batch-csv-gate.schema.json")
+    members = set(gate["firstBatchMaterialIds"])
+    completed = set(gate["completedMaterialIds"])
+    valid = set(gate["validCsvMaterialIds"])
+    unknown = set(gate["unknownMaterialIds"])
+    if (
+        gate["runId"] != path.name or outcomes.get("firstBatchCsvGate") != gate
+        or not completed <= members or not valid <= completed or not unknown <= members
+        or completed & unknown
+        or (gate["status"] in {"passed", "blocked"} and (completed != members or unknown))
+        or (gate["status"] == "passed" and not valid)
+        or (gate["status"] == "blocked" and (valid or gate["errorCode"] != "first_batch_no_valid_csv"))
+    ):
+        raise CliError("csv_gate_mismatch", "first-batch CSV evidence is inconsistent")
+    return gate
+
+
+def _verify_paused_acquisition(path: Path, status: dict[str, Any]) -> dict[str, Any]:
+    outcomes = _read_json(path / OUTCOMES_FILENAME)
+    receipt = _read_json(path / "acquisition-receipt.json")
+    validate_payload(outcomes, "acquisition-results.schema.json")
+    validate_payload(receipt, "script-acquisition-receipt.schema.json")
+    gate = _verify_csv_gate(path, outcomes)
+    if (
+        gate["status"] not in {"pending", "blocked", "unconfirmed"}
+        or any(item.get("runId") != path.name for item in (status, outcomes, receipt))
+        or any(item.get("status") != "rpaPaused" for item in (outcomes, receipt))
+        or any(item.get("gatePath") != "first-batch-csv-gate.json" for item in (status, receipt))
+        or any(item.get("errorCode") != gate["errorCode"] or item.get("message") != gate["message"] for item in (status, receipt))
+    ):
+        raise CliError("csv_gate_mismatch", "paused state and first-batch receipts differ")
+    for name in receipt["outputs"]:
+        output = (path / name).resolve()
+        if not output.is_relative_to(path) or not output.is_file():
+            raise CliError("missing_output", "paused acquisition evidence is missing or outside the run")
+    return {
+        **_acquisition_reply(path, path), "verification": "paused",
+        "checkedFiles": ["status.json", OUTCOMES_FILENAME, "acquisition-receipt.json", "first-batch-csv-gate.json"],
+    }
+
+
 def _verify(args: argparse.Namespace) -> dict[str, Any]:
     path = Path(args.path).expanduser().resolve()
     status = _read_json(path / "status.json")
     if status.get("operation") == "analysis":
         return _verify_workbench_operation(path, status)
     validate_payload(status, "script-run-status.schema.json")
+    if status["state"] == "rpaPaused":
+        return _verify_paused_acquisition(path, status)
+    if status["state"] not in {"ready", "partialFailed"}:
+        assert_detail_rpa_not_paused(path)
     checked = ["status.json"]
     if status.get("operation") in {"generation", "rewrite"}:
         run_dir = path.parent.parent.resolve()
@@ -764,6 +826,11 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
                 raise CliError("missing_outcome_receipt", "acquisition results are not listed in the receipt")
             if outcomes["runId"] != status["runId"] or outcomes["status"] != status["state"]:
                 raise CliError("identity_mismatch", "acquisition results identity or state differs")
+            if "firstBatchCsvGate" in outcomes or (path / "first-batch-csv-gate.json").exists():
+                gate = _verify_csv_gate(path, outcomes)
+                if gate["status"] != "passed":
+                    raise CliError("csv_gate_mismatch", "acquisition is not allowed past the first-batch CSV gate")
+                checked.append("first-batch-csv-gate.json")
             if len(outcomes["materials"]) != len(pack["materials"]):
                 raise CliError("count_mismatch", "acquisition material count differs")
             state_counts = {key: 0 for key in ("available", "submittedWithoutScript", "failed", "submissionUnknown", "unsubmitted")}
@@ -1059,7 +1126,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         payload = _dispatch(args)
         print(json.dumps(payload, ensure_ascii=False))
-        return 0
+        return 2 if payload.get("status") == "rpaPaused" else 0
+    except RpaPausedError as exc:
+        print(json.dumps({"status": "rpaPaused", "errorCode": exc.error_code,
+                          "message": _safe_error(exc), "firstBatchCsvGate": exc.gate}, ensure_ascii=False))
+        return 2
     except Exception as exc:
         print(json.dumps({"status": "failed", "errorCode": getattr(exc, "error_code", type(exc).__name__), "error": _safe_error(exc)}, ensure_ascii=False))
         return 1

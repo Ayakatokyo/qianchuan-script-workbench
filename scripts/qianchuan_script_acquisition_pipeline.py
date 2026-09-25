@@ -10,12 +10,14 @@ from pathlib import Path
 import shutil
 from threading import Lock
 from typing import Any
+from date_policy import validate_period
 
 from qianchuan_script_acquisition_identity import audit_identity
+from qianchuan_script_acquisition_gate import FirstBatchCsvGate, GATE_FILENAME, assert_detail_rpa_not_paused
 from qianchuan_script_acquisition_contracts import AcquisitionRequest
 from qianchuan_script_acquisition_fact_pack import build_source_pack, extract_script_content, normalize_text, script_completeness
 from qianchuan_script_acquisition_field_registry import FieldRegistry, load_field_registry
-from qianchuan_script_acquisition_csv_parser import parse_diagnosis_csv
+from qianchuan_script_acquisition_csv_parser import RpaCsvError, parse_diagnosis_csv
 from qianchuan_script_acquisition_receipt import atomic_json, write_receipt, write_status
 from qianchuan_script_acquisition_report_client import (
     ReportClientError,
@@ -275,12 +277,34 @@ def _store_payload_file(path: Path, output_dir: Path, kind: str) -> dict[str, st
     return {"path": _relative_path(path, output_dir), "sha256": digest, "kind": kind}
 
 
+def _has_business_value(value: Any) -> bool:
+    if isinstance(value, dict):
+        excluded = {"error", "errors", "errorcode", "errormessage", "message", "status", "success", "code", "materialid", "material_id", "recordtype"}
+        return any(_has_business_value(item) for key, item in value.items() if str(key).lower() not in excluded)
+    if isinstance(value, (list, tuple)):
+        return any(_has_business_value(item) for item in value)
+    return value is not None and (not isinstance(value, str) or bool(value.strip()))
+
+
+def _csv_business_record(record: dict[str, Any]) -> bool:
+    if record.get("recordType") not in {"material_info", "material_detail", "script_analysis", "video_metrics", "video_info"} or record.get("parseStatus") == "failed":
+        return False
+    return _has_business_value(extract_script_content(record)) or any(_has_business_value(record.get(key)) for key in (
+        "materialName", "material_name", "name", "videoDuration", "durationSec",
+        "createTime", "create_time", "videoUrl", "video_url", "metricValue",
+        "Dimensions", "Metrics", "Fields",
+    ))
+
+
 def _task_records(
     result: Any,
     rpa_gateway: Any,
     output_dir: Path,
     material_id: str,
     attempt: int = 1,
+    *,
+    material: Any = None,
+    gate: FirstBatchCsvGate | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     """Persist each attempt's returned payload before parsing or identity checks."""
     output_dir = Path(output_dir)
@@ -291,7 +315,8 @@ def _task_records(
         for record in (result.records if isinstance(result, RpaTaskResult) else getattr(result, "records", ()) or ())
     ]
     payload_files: list[dict[str, str]] = []
-    if records:
+    files = list(result.files if isinstance(result, RpaTaskResult) else getattr(result, "files", ()) or ())
+    if records and not files:
         target = output_dir / "source-data" / "rpa" / f"{key}-attempt-{attempt:02d}.records.json"
         if target.exists():
             raise FileExistsError("RPA attempt payload already exists")
@@ -302,11 +327,12 @@ def _task_records(
             payloadFiles=payload_files,
             payloadSha256=_combined_payload_hash(payload_files),
         )
-        return records, payload_files
+        # JSON payloads remain evidence, but cannot substitute for actual CSV.
+        return [], payload_files
 
-    files = list(result.files if isinstance(result, RpaTaskResult) else getattr(result, "files", ()) or ())
     records_dir = output_dir / "source-data" / "rpa"
     parsed: list[dict[str, Any]] = []
+    parse_errors: list[RpaCsvError] = []
     for index, file_item in enumerate(files, start=1):
         target = records_dir / f"{key}-attempt-{attempt:02d}-{index}.csv"
         if target.exists():
@@ -318,13 +344,29 @@ def _task_records(
                 raise ValueError("downloaded RPA payload is missing")
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(downloaded, target)
+        try:
+            csv_records = [_record_payload(record) for record in parse_diagnosis_csv(target)]
+        except RpaCsvError as exc:
+            # Preserve the bad attachment, then inspect every returned CSV. One
+            # malformed attachment must not hide another verified CSV.
+            parse_errors.append(exc)
+            csv_records = []
+        observed_ids = {str(record.get("materialId") or "").strip() for record in csv_records}
+        identity = audit_identity(material, csv_records)
+        business_rows = [record for record in csv_records if _csv_business_record(record)]
+        if observed_ids == {material_id} and business_rows and identity["state"] != "mismatch":
+            # Preserve valid CSV before normalized facts or scripts are written.
+            # A local processing failure must not imply bad RPA inputs.
+            if gate is not None:
+                gate.record_valid_csv(material_id)
         payload_files.append(_store_payload_file(target, output_dir, "csv"))
         _update_attempt(
             attempt_path,
             payloadFiles=list(payload_files),
             payloadSha256=_combined_payload_hash(payload_files),
         )
-        csv_records = [_record_payload(record) for record in parse_diagnosis_csv(target)]
+        if not csv_records:
+            continue
         records_target = target.with_suffix(".records.json")
         if records_target.exists():
             raise FileExistsError("normalized RPA attempt payload already exists")
@@ -338,6 +380,8 @@ def _task_records(
         )
     if not files:
         _update_attempt(attempt_path, payloadFiles=[], payloadSha256=None)
+    if parse_errors and not parsed:
+        raise parse_errors[0]
     return parsed, payload_files
 
 
@@ -375,6 +419,7 @@ def _invoke_material(
     output_dir: Path,
     attempt: int = 1,
     on_task_submitted: Any = None,
+    execution_gate: FirstBatchCsvGate | None = None,
 ) -> tuple[str, RpaTaskResult]:
     """Persist attempt state before submit and task identity before polling."""
     material_id = _material_id(material)
@@ -419,6 +464,8 @@ def _invoke_material(
         params,
         timeout_sec=request.live_acquire.timeout_sec,
         on_submitted=on_submitted,
+        execution_gate=execution_gate,
+        attempt=attempt,
     )
     attempt_record.update(phase="terminal_success", taskState="completed")
     atomic_json(attempt_path, attempt_record)
@@ -447,6 +494,7 @@ def _process_result(
     output_dir: Path,
     attempt_number: int,
     prior_refs: list[str] | None = None,
+    gate: FirstBatchCsvGate | None = None,
 ) -> dict[str, Any]:
     material_id = _material_id(material)
     attempt_path = _attempt_path(output_dir, material_id, attempt_number)
@@ -454,7 +502,7 @@ def _process_result(
     attempt.update(phase="terminal_success", taskState="completed")
     atomic_json(attempt_path, attempt)
     try:
-        records, _payload_files = _task_records(result, rpa_gateway, output_dir, material_id, attempt_number)
+        records, _payload_files = _task_records(result, rpa_gateway, output_dir, material_id, attempt_number, material=material, gate=gate)
     except Exception:
         attempt = _update_attempt(attempt_path, phase="payload_parse_failed", taskState="completed", errorCode="payload_parse_error")
         return {
@@ -649,6 +697,8 @@ def acquire_scripts(
     if request.live_acquire is None:
         raise ValueError("acquire_scripts requires liveAcquire")
     output_dir = Path(output_dir)
+    assert_detail_rpa_not_paused(output_dir)
+    validate_period(request.period["startDate"], request.period["endDate"])
     result_path = output_dir / "facts" / "qianchuan-script-source-pack.json"
     if result_path.is_file():
         return result_path
@@ -727,6 +777,7 @@ def acquire_scripts(
     script_facts: dict[str, dict[str, Any]] = {}
     hard_stop = False
     stop_reason: str | None = None
+    gate = FirstBatchCsvGate(output_dir, [_material_id(item) for item in selected_materials[:RPA_MAX_CONCURRENCY]]) if selected_materials else None
 
     if selected_materials:
         try:
@@ -748,6 +799,13 @@ def acquire_scripts(
         with ThreadPoolExecutor(max_workers=RPA_MAX_CONCURRENCY) as executor:
             while task_queue or active:
                 while task_queue and len(active) < RPA_MAX_CONCURRENCY and not hard_stop:
+                    # No rolling refill or identity retry until the first cohort
+                    # is fully terminal and at least one actual CSV is verified.
+                    next_material, next_attempt, _ = task_queue[0]
+                    if gate is not None and gate.payload["status"] != "passed" and (
+                        next_attempt != 1 or _material_id(next_material) not in gate.payload["firstBatchMaterialIds"]
+                    ):
+                        break
                     material, attempt_number, prior_refs = task_queue.pop(0)
                     material_id = _material_id(material)
                     if not material_id:
@@ -769,6 +827,7 @@ def acquire_scripts(
                     future = executor.submit(
                         _invoke_material, material, request, detail, rpa_gateway, output_dir, attempt_number,
                         record_submission,
+                        gate,
                     )
                     active[future] = (material, attempt_number, prior_refs)
                     write_status(
@@ -797,6 +856,7 @@ def acquire_scripts(
                             processed = _process_result(
                                 material, result, rpa_gateway, output_dir, attempt_number,
                                 prior_refs=prior_refs,
+                                gate=gate,
                             )
                         except Exception:
                             attempt_path = _attempt_path(output_dir, material_id, attempt_number)
@@ -821,6 +881,11 @@ def acquire_scripts(
                     else:
                         attempts.append(current_attempt)
                     outcome["attempts"] = attempts
+                    if gate is not None and attempt_number == 1:
+                        gate.record_result(material_id, terminal=(current_attempt.get("taskState") in {"completed", "failed"} or current_attempt.get("submissionState") == "notSubmitted"))
+                        if gate.payload["status"] in {"blocked", "unconfirmed"}:
+                            hard_stop = True
+                            stop_reason = gate.payload["errorCode"]
                     script_facts[material_id] = processed["scriptFact"]
                     if processed.get("retryEligible") and not hard_stop:
                         task_queue.append((material, 2, _attempt_refs(processed["attempt"])))
@@ -852,6 +917,31 @@ def acquire_scripts(
         if outcome_by_id[material_id]["state"] == "unsubmitted":
             script_facts[material_id] = {"parseStatus": "missing", "sourceRefs": []}
 
+    if gate is not None:
+        gate.finish()
+        if gate.payload["status"] != "passed":
+            stop_reason = gate.payload["errorCode"]
+            outcome_payload = _outcome_summary(outcomes, output_dir.name, "rpaPaused", stop_reason)
+            outcome_payload["firstBatchCsvGate"] = gate.payload
+            outcome_payload["scheduler"] = {
+                "maxConcurrency": RPA_MAX_CONCURRENCY,
+                "submittedTaskCount": submitted_count,
+                "events": scheduler_events,
+                "underfillReason": "first_batch_csv_gate",
+                "hardStopObserved": True,
+            }
+            outcomes_path = atomic_json(output_dir / OUTCOMES_FILENAME, outcome_payload)
+            write_status(output_dir, "rpaPaused", errorCode=stop_reason, message=gate.payload["message"], gatePath=GATE_FILENAME)
+            write_receipt(output_dir, {
+                "schemaVersion": 1, "runId": output_dir.name, "status": "rpaPaused",
+                "counts": {"requested": len(outcomes), "available": outcome_payload["counts"]["available"],
+                           "missing": outcome_payload["counts"]["submittedWithoutScript"] + outcome_payload["counts"]["unsubmitted"],
+                           "failed": outcome_payload["counts"]["failed"] + outcome_payload["counts"]["submissionUnknown"]},
+                "outputs": ["status.json", OUTCOMES_FILENAME, GATE_FILENAME, REPORT_RECEIPT_FILENAME, REPORT_SNAPSHOT_PATH, SELECTION_FILENAME],
+                "errorCode": stop_reason, "message": gate.payload["message"], "gatePath": GATE_FILENAME,
+            })
+            return outcomes_path
+
     source_selection = {
         "runId": output_dir.name,
         "rankingField": selection.query.sort_entry["id"],
@@ -876,6 +966,8 @@ def acquire_scripts(
     failed_or_unsafe = any(item["state"] in {"failed", "submissionUnknown", "unsubmitted"} for item in outcomes)
     state = "partialFailed" if failed_or_unsafe else "ready"
     outcome_payload = _outcome_summary(outcomes, output_dir.name, state, stop_reason)
+    if gate is not None:
+        outcome_payload["firstBatchCsvGate"] = gate.payload
     outcome_payload["scheduler"] = {
         "maxConcurrency": RPA_MAX_CONCURRENCY,
         "submittedTaskCount": submitted_count,

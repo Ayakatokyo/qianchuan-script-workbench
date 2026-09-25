@@ -28,6 +28,8 @@
 
 ## 状态边界
 
-取数：`awaitingInput|querying|awaitingSelection|rpaProcessing|sourcePackBuilding|sourcePackVerifying|ready|partialFailed|failed`。分析：`awaitingModel|completed|blocked|failed`。生成/改写沿用 `prepared|awaitingModel|draftOnly|completed|blocked|failed`。`verify` 是只读一致性检查；技术校验通过不代表平台在线流程实际运行、客户事实已确认、模型结论正确或文案可直接投放。
+取数：`awaitingInput|querying|awaitingSelection|rpaProcessing|rpaPaused|sourcePackBuilding|sourcePackVerifying|ready|partialFailed|failed`。分析：`awaitingModel|completed|blocked|failed`。生成/改写沿用 `prepared|awaitingModel|draftOnly|completed|blocked|failed`。`verify` 是只读一致性检查；技术校验通过不代表平台在线流程实际运行、客户事实已确认、模型结论正确或文案可直接投放。
+
+`first-batch-csv-gate.json` 记录首批固定素材、已确认/有效 CSV/未知素材及 `pending|passed|blocked|unconfirmed`。首批全已确认而零有效 CSV 的错误码为 `first_batch_no_valid_csv`，状态和采集回执为 `rpaPaused`，提示入参可能有问题；未知状态保留独立错误码。`acquisition-results.json.firstBatchCsvGate` 保存相同门禁。暂停保留来源及逐任务错误，但不构建成功事实包或交接；`verify` 核对暂停证据后返回 `verification=paused`，退出码 2，不应据此进入报告或分析。
 
 平台脚本、素材指标、客户事实和模型推断分层保存。指标只能描述所选期间和口径下的观测，不作因果结论；品牌专属规则、画面/音频分析和视频加工不属于本 Skill。

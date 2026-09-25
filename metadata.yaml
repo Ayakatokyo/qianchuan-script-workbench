@@ -49,7 +49,7 @@ skill_form:
   - key: date_range
     type: daterange
     label: 时间范围
-    description: 对应起止日期，日期格式为 YYYY-MM-DD；不含执行日和前一日
+    description: 对应起止日期，日期格式为 YYYY-MM-DD；按北京时间仅可选择前天及以前，执行前再次校验
     placeholder: "开始日期,结束日期"
     format: YYYY-MM-DD
     value_format: YYYY-MM-DD

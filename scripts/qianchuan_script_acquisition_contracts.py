@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Mapping
 
+from date_policy import validate_period
 from errors import ContractError
 
 
@@ -41,6 +42,8 @@ def _period(payload: Mapping[str, Any]) -> dict[str, str]:
     try:
         start_date = date.fromisoformat(start)
         end_date = date.fromisoformat(end)
+        if start_date.isoformat() != start or end_date.isoformat() != end:
+            raise ValueError
     except ValueError as exc:
         raise ContractError("period dates must use YYYY-MM-DD") from exc
     if start_date > end_date:
@@ -128,7 +131,10 @@ class AcquisitionRequest:
             raise ContractError("schemaVersion must be 1")
         live = LiveAcquire.from_dict(payload["liveAcquire"]) if present[0] == "liveAcquire" else None
         verified = VerifiedRun.from_value(payload["verifiedRun"]) if present[0] == "verifiedRun" else None
-        return cls(period=_period(payload), live_acquire=live, verified_run=verified, schema_version=version)
+        period = _period(payload)
+        if live is not None:
+            period = validate_period(period["startDate"], period["endDate"])
+        return cls(period=period, live_acquire=live, verified_run=verified, schema_version=version)
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {"schemaVersion": self.schema_version, "period": self.period}

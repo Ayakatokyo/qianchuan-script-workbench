@@ -10,6 +10,9 @@ from short_video_foundation.qianchuan_script_acquisition.rpa_client import (
     invoke_once,
     validate_business_params,
 )
+from qianchuan_script_acquisition_gate import FirstBatchCsvGate
+
+VALID_PARAMS = {"material_id": "m1", "date_type": "CUSTOM", "custom_start_date": "2026-09-01", "custom_end_date": "2026-09-07"}
 
 
 class FakeGateway:
@@ -48,6 +51,11 @@ class FakeGateway:
 
 
 class Batch3RpaClientTests(unittest.TestCase):
+    def gate(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        return FirstBatchCsvGate(Path(directory.name), ["m1"])
+
     def test_rpa_shop_must_be_in_current_authorizations(self):
         gateway = FakeGateway(accounts=[{"shopId": "rpa-allowed"}])
         with self.assertRaisesRegex(RpaAuthorizationError, "rpaShop"):
@@ -69,10 +77,11 @@ class Batch3RpaClientTests(unittest.TestCase):
             gateway,
             gateway.connector_detail(),
             "rpa-allowed",
-            {"material_id": "m1", "date_type": "CUSTOM"},
+            dict(VALID_PARAMS),
             clock=lambda: 0,
             sleep=lambda _seconds: None,
             timeout_sec=10,
+            execution_gate=self.gate(),
         )
         self.assertEqual(result.status, "partial_success")
         self.assertEqual(gateway.submissions, ["m1"])
@@ -81,8 +90,39 @@ class Batch3RpaClientTests(unittest.TestCase):
     def test_failed_terminal_status_is_not_retried(self):
         gateway = FakeGateway(accounts=[{"shopId": "rpa-allowed"}], statuses=["failed"])
         with self.assertRaises(RpaTaskError):
-            invoke_once(gateway, gateway.connector_detail(), "rpa-allowed", {"material_id": "m1", "date_type": "CUSTOM"}, clock=lambda: 0, sleep=lambda _seconds: None, timeout_sec=10)
+            invoke_once(gateway, gateway.connector_detail(), "rpa-allowed", dict(VALID_PARAMS), clock=lambda: 0, sleep=lambda _seconds: None, timeout_sec=10, execution_gate=self.gate())
         self.assertEqual(gateway.submissions, ["m1"])
+
+    def test_direct_invocation_requires_gate_and_cannot_repeat_first_attempt(self):
+        gateway = FakeGateway(accounts=[{"shopId": "rpa-allowed"}])
+        args = (gateway, gateway.connector_detail(), "rpa-allowed", dict(VALID_PARAMS))
+        with self.assertRaisesRegex(ValueError, "首批 CSV 门禁"):
+            invoke_once(*args)
+        self.assertEqual(gateway.submissions, [])
+        gate = self.gate()
+        invoke_once(*args, execution_gate=gate)
+        with self.assertRaisesRegex(RuntimeError, "already started"):
+            invoke_once(*args, execution_gate=gate)
+        self.assertEqual(gateway.submissions, ["m1"])
+
+    def test_legacy_gateway_helper_also_requires_gate(self):
+        from rpa_gateway import invoke_once as legacy_invoke_once
+        gateway = FakeGateway(accounts=[{"shopId": "rpa-allowed"}])
+        with self.assertRaisesRegex(ValueError, "首批 CSV 门禁"):
+            legacy_invoke_once(gateway, gateway.connector_detail(), "rpa-allowed", {"material_id": "m1", "date_type": "CUSTOM"})
+        self.assertEqual(gateway.submissions, [])
+
+    def test_low_level_submission_requires_complete_valid_custom_dates(self):
+        for params in (
+            {"material_id": "m1", "date_type": "CUSTOM"},
+            {**VALID_PARAMS, "custom_end_date": "9999-12-31"},
+            {**VALID_PARAMS, "date_type": "YESTERDAY"},
+        ):
+            with self.subTest(params=params):
+                gateway = FakeGateway(accounts=[{"shopId": "rpa-allowed"}])
+                with self.assertRaises(ValueError):
+                    invoke_once(gateway, gateway.connector_detail(), "rpa-allowed", params, execution_gate=self.gate())
+                self.assertEqual(gateway.submissions, [])
 
     def test_rpa_gateway_download_rejects_unsafe_filename_and_oversized_file(self):
         gateway = RpaGateway()
