@@ -1,0 +1,3 @@
+# Runtime libraries are required; tests do not download ASR model weights.
+-r requirements.txt
+PyYAML==6.0.3

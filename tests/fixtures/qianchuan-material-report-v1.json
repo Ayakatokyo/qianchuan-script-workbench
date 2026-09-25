@@ -1,0 +1,17 @@
+[
+  {
+    "materialId": "m-1",
+    "dimensions": {"materialName": "素材一"},
+    "metrics": {"total_ecpm_for_roi2": "1.10"}
+  },
+  {
+    "materialId": "m-2",
+    "dimensions": {"materialName": "素材二"},
+    "metrics": {"total_ecpm_for_roi2": "2.20"}
+  },
+  {
+    "materialId": "m-filtered",
+    "dimensions": {"materialName": "素材三"},
+    "metrics": {"total_ecpm_for_roi2": "0.20"}
+  }
+]

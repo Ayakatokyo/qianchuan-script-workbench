@@ -1,0 +1,152 @@
+{
+  "files": {
+    "test_batch3_csv_parser.py": {
+      "sourceSha256": "230b5238a84b957a33ef1c42f7b979f96a3e9a72ed0586479192e52126a7afaf",
+      "migratedSha256": "230b5238a84b957a33ef1c42f7b979f96a3e9a72ed0586479192e52126a7afaf",
+      "excludedMethods": [],
+      "adaptations": []
+    },
+    "test_batch3_report_query.py": {
+      "sourceSha256": "304da90c88886aa18a7f021d45848851583245166427e759430fe8fb2ae0d267",
+      "migratedSha256": "304da90c88886aa18a7f021d45848851583245166427e759430fe8fb2ae0d267",
+      "excludedMethods": [],
+      "adaptations": []
+    },
+    "test_batch3_rpa_client.py": {
+      "sourceSha256": "617e0e249f929ecb02587be78ffb9b471f9a204f6301b4872c68950ff27cc6bb",
+      "migratedSha256": "617e0e249f929ecb02587be78ffb9b471f9a204f6301b4872c68950ff27cc6bb",
+      "excludedMethods": [],
+      "adaptations": []
+    },
+    "test_batch3_verified_run.py": {
+      "sourceSha256": "57aa5855facacb7d04f1b593c1dabb7a577595fb676e517098bbe852bdce375c",
+      "migratedSha256": "57aa5855facacb7d04f1b593c1dabb7a577595fb676e517098bbe852bdce375c",
+      "excludedMethods": [],
+      "adaptations": []
+    },
+    "test_batch3_acquisition_pipeline.py": {
+      "sourceSha256": "6c4383eb9ee756d53afe45c293fbfd543055208c4fc1fbb6514e7e7ec9f2f211",
+      "migratedSha256": "6c4383eb9ee756d53afe45c293fbfd543055208c4fc1fbb6514e7e7ec9f2f211",
+      "excludedMethods": [],
+      "adaptations": []
+    },
+    "test_batch3_generation.py": {
+      "sourceSha256": "7ad13b6b04fe7d5b1d0ca77f496bacadd7a1b8fcb74807252d26bb13417e33ab",
+      "migratedSha256": "7ad13b6b04fe7d5b1d0ca77f496bacadd7a1b8fcb74807252d26bb13417e33ab",
+      "excludedMethods": [],
+      "adaptations": []
+    },
+    "test_batch3_rewrite.py": {
+      "sourceSha256": "4fa51fd215a88801c29051179705671439791b7e5e0f37cee0dcafd0d29ff983",
+      "migratedSha256": "4fa51fd215a88801c29051179705671439791b7e5e0f37cee0dcafd0d29ff983",
+      "excludedMethods": [],
+      "adaptations": []
+    },
+    "test_batch3_intake_live_contract.py": {
+      "sourceSha256": "75dd8f8dece04bb024ef8db6904cfee6f9efdc9b9761deec36ef1c747be78c69",
+      "migratedSha256": "45073469903114340fc19d801bdc2c09398549c7cfc0b40c53d90b2b3e68b4a3",
+      "excludedMethods": [
+        "test_creative_followup_is_after_acquisition_and_is_one_compact_question"
+      ],
+      "adaptations": [
+        "SKILL_NAMES = (\n    \"qianchuan-reference-script-generation\",\n    \"yijiazhiyan-information-flow-script-generation\",\n    \"qianchuan-reference-script-rewrite\",\n)",
+        "ROOT / \"skills\" / name",
+        "Default-output assertion runs with an external temporary working directory, because the standalone root is a Skill installation and correctly forbids outputs inside itself.",
+        "Normalize the temporary directory real path on macOS /var symlink.",
+        "Parse YAML pre_input block after header line, treating both | and |- block scalar indicators consistently."
+      ]
+    },
+    "test_batch3_workbench.py": {
+      "sourceSha256": "4c4bd794a24af34b8ce17fd5954f099d2dac3e1103bdf7bb4f0d684283a248ba",
+      "migratedSha256": "277954655b3b4fe8dbfd398c3faaa4fa35c455acd9ae779db191315711d06d99",
+      "excludedMethods": [],
+      "adaptations": [
+        "WORKBENCH_ROOT = PROJECT_ROOT / \"skills\" / \"qianchuan-script-workbench\""
+      ]
+    },
+    "__init__.py": {
+      "migratedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fixtures/qianchuan-material-report-v1.json": {
+      "migratedSha256": "5c5d89b4e535c15106b797a3ab0b58a366ebe38f622ae4462dda63f0b6cf58ad",
+      "sourceSha256": "5c5d89b4e535c15106b797a3ab0b58a366ebe38f622ae4462dda63f0b6cf58ad"
+    },
+    "fixtures/qianchuan-script-diagnosis-v1.csv": {
+      "migratedSha256": "19b9e470788f913528dd72ad8e87d52aff405014ac7e7c84d1a62d8ff5b72e35",
+      "sourceSha256": "19b9e470788f913528dd72ad8e87d52aff405014ac7e7c84d1a62d8ff5b72e35"
+    },
+    "module_layout.json": {
+      "migratedSha256": "ce942b52a761681bd144dfd3577435acd5af02cb6027b7cbb46e9598dd05c3de"
+    },
+    "sitecustomize.py": {
+      "migratedSha256": "ee7e8bc000da85173a77b4a839376a77374f473f744f7b99e8f1fac66ad772be"
+    }
+  },
+  "excludedScope": [
+    "Original real-customer snapshot/environment gated tests remain in the management-history repository; no private snapshot was copied or online baseline asserted.",
+    "Original multi-skill packaging, shared-copy equality, repository-boundary and batch-layout tests are superseded by independent package-byte equivalence and isolated-copy execution checks."
+  ],
+  "notSelectedOriginalModules": [
+    "test_adapters.py",
+    "test_analysis_assembler.py",
+    "test_analysis_session.py",
+    "test_availability.py",
+    "test_batch14_contracts.py",
+    "test_batch14_failure_states.py",
+    "test_batch14_highlight_alignment.py",
+    "test_batch14_packaging.py",
+    "test_batch14_platform_end_to_end.py",
+    "test_batch14_qianchuan_candidates.py",
+    "test_batch14_qianchuan_detail.py",
+    "test_batch14_real_baseline.py",
+    "test_batch14_review_fixes.py",
+    "test_batch14_single_pass.py",
+    "test_batch14_skill_documents.py",
+    "test_batch14_skill_metadata.py",
+    "test_batch14_upload_only.py",
+    "test_batch14_yuntu_candidates.py",
+    "test_batch14_yuntu_detail.py",
+    "test_batch1_cli.py",
+    "test_batch1_end_to_end.py",
+    "test_batch1_real_baseline.py",
+    "test_batch3_brand_business_flow.py",
+    "test_batch3_cli.py",
+    "test_batch3_contracts.py",
+    "test_batch3_packaging.py",
+    "test_batch3_real_baseline.py",
+    "test_batch3_run_identity.py",
+    "test_batch3_skill_documents.py",
+    "test_batch3_workflow_repairs.py",
+    "test_batch3_yijiazhiyan.py",
+    "test_business_analysis.py",
+    "test_contracts.py",
+    "test_media_asr.py",
+    "test_ocr_contract.py",
+    "test_ocr_isolation.py",
+    "test_pipeline.py",
+    "test_portable_dependencies.py",
+    "test_primary_evidence.py",
+    "test_project_boundaries.py",
+    "test_qianchuan_adapter.py",
+    "test_real_baseline.py",
+    "test_secondary_providers.py",
+    "test_secondary_store.py",
+    "test_shared_skill_contracts.py",
+    "test_shots_ocr.py",
+    "test_single_video_packaging.py",
+    "test_single_video_skill.py",
+    "test_skill_delivery.py",
+    "test_skill_market_metadata.py",
+    "test_skill_script_layout.py",
+    "test_timeline.py",
+    "test_upload_contracts.py",
+    "test_upload_end_to_end.py",
+    "test_upload_ingest.py",
+    "test_uploaded_primary_evidence.py",
+    "test_visual_observations.py",
+    "test_yuntu_adapter.py"
+  ],
+  "sourceBaselineCommit": "ab7e68049155336e774437f8e342e8f7c3272648",
+  "runtimeModified": false
+}

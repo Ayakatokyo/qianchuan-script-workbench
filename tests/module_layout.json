@@ -1,0 +1,22 @@
+{
+  "short_video_foundation.errors": "../scripts/errors.py",
+  "short_video_foundation.qianchuan_script_acquisition.contracts": "../scripts/qianchuan_script_acquisition_contracts.py",
+  "short_video_foundation.qianchuan_script_acquisition.csv_parser": "../scripts/qianchuan_script_acquisition_csv_parser.py",
+  "short_video_foundation.qianchuan_script_acquisition.fact_pack": "../scripts/qianchuan_script_acquisition_fact_pack.py",
+  "short_video_foundation.qianchuan_script_acquisition.field_registry": "../scripts/qianchuan_script_acquisition_field_registry.py",
+  "short_video_foundation.qianchuan_script_acquisition.identity": "../scripts/qianchuan_script_acquisition_identity.py",
+  "short_video_foundation.qianchuan_script_acquisition.pipeline": "../scripts/qianchuan_script_acquisition_pipeline.py",
+  "short_video_foundation.qianchuan_script_acquisition.receipt": "../scripts/qianchuan_script_acquisition_receipt.py",
+  "short_video_foundation.qianchuan_script_acquisition.report_client": "../scripts/qianchuan_script_acquisition_report_client.py",
+  "short_video_foundation.qianchuan_script_acquisition.rpa_client": "../scripts/qianchuan_script_acquisition_rpa_client.py",
+  "short_video_foundation.qianchuan_script_acquisition.selection": "../scripts/qianchuan_script_acquisition_selection.py",
+  "short_video_foundation.qianchuan_script_acquisition.verified_run": "../scripts/qianchuan_script_acquisition_verified_run.py",
+  "short_video_foundation.script_cli": "../scripts/script_cli.py",
+  "short_video_foundation.script_creation.contracts": "../scripts/script_creation_contracts.py",
+  "short_video_foundation.script_creation.reporting": "../scripts/script_creation_reporting.py",
+  "short_video_foundation.script_creation.selection": "../scripts/script_creation_selection.py",
+  "short_video_foundation.script_creation.session": "../scripts/script_creation_session.py",
+  "short_video_foundation.script_creation.validation": "../scripts/script_creation_validation.py",
+  "short_video_foundation.single_video.gateway": "../scripts/rpa_gateway.py",
+  "short_video_foundation.single_video.http": "../scripts/http_transport.py"
+}
