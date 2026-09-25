@@ -132,6 +132,7 @@ class WorkbenchInputDatesTests(unittest.TestCase):
         request = AcquisitionRequest.from_dict(normalized)
         self.assertEqual(request.period, {"startDate": "2026-01-02", "endDate": "2026-01-04"})
         self.assertEqual(request.live_acquire.to_dict(), {
+            "identityRetryLimit": 2,
             "apiShop": "chosen-api", "rpaShop": "chosen-rpa", "topN": 7, "timeoutSec": 600,
             "materialFilterSort": {"sortField": "整体消耗", "direction": "asc", "filters": []},
         })

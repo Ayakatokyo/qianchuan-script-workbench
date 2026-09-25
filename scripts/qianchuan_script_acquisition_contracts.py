@@ -59,6 +59,7 @@ class LiveAcquire:
     top_n: int = 10
     material_filter_sort: dict[str, Any] | None = None
     timeout_sec: int = 600
+    identity_retry_limit: int = 2
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "LiveAcquire":
@@ -70,6 +71,9 @@ class LiveAcquire:
         timeout_sec = payload.get("timeoutSec", 600)
         if isinstance(timeout_sec, bool) or not isinstance(timeout_sec, int) or timeout_sec < 1:
             raise ContractError("timeoutSec must be a positive integer")
+        identity_retry_limit = payload.get("identityRetryLimit", 2)
+        if isinstance(identity_retry_limit, bool) or not isinstance(identity_retry_limit, int) or not 0 <= identity_retry_limit <= 3:
+            raise ContractError("identityRetryLimit must be an integer between 0 and 3")
         return cls(
             api_shop=_required_text(payload, "apiShop"),
             rpa_shop=_required_text(payload, "rpaShop"),
@@ -77,6 +81,7 @@ class LiveAcquire:
             top_n=top_n,
             material_filter_sort=dict(payload.get("materialFilterSort") or {}),
             timeout_sec=timeout_sec,
+            identity_retry_limit=identity_retry_limit,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -86,6 +91,7 @@ class LiveAcquire:
             "topN": self.top_n,
             "materialFilterSort": self.material_filter_sort or {},
             "timeoutSec": self.timeout_sec,
+            "identityRetryLimit": self.identity_retry_limit,
         }
         if self.advertiser_id is not None:
             result["advertiserId"] = self.advertiser_id

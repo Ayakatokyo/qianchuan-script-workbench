@@ -9,6 +9,7 @@
     "status": {"enum": ["ready", "partialFailed", "rpaPaused"]},
     "firstBatchCsvGate": {"type": "object"},
     "stopReason": {"type": "string"},
+    "identityRetryLimit": {"type": "integer", "minimum": 0, "maximum": 3},
     "counts": {
       "type": "object",
       "additionalProperties": false,
@@ -29,6 +30,7 @@
       "required": ["maxConcurrency", "submittedTaskCount", "events", "underfillReason", "hardStopObserved"],
       "properties": {
         "maxConcurrency": {"const": 3},
+        "effectiveConcurrency": {"enum": [1, 3]},
         "submittedTaskCount": {"type": "integer", "minimum": 0},
         "underfillReason": {"type": "string", "minLength": 1},
         "hardStopObserved": {"type": "boolean"},
@@ -40,7 +42,8 @@
             "required": ["materialId", "attempt", "submittedAt", "inFlight", "queued", "reason"],
             "properties": {
               "materialId": {"type": "string", "minLength": 1},
-              "attempt": {"type": "integer", "minimum": 1, "maximum": 2},
+              "attempt": {"type": "integer", "minimum": 1, "maximum": 4},
+              "identityRecovery": {"type": "boolean"},
               "submittedAt": {"type": "string"},
               "inFlight": {"type": "integer", "minimum": 1, "maximum": 3},
               "queued": {"type": "integer", "minimum": 0},
@@ -71,7 +74,7 @@
               "properties": {
                 "schemaVersion": {"const": 1},
                 "materialId": {"type": "string", "minLength": 1},
-                "attempt": {"type": "integer", "minimum": 1, "maximum": 2},
+                "attempt": {"type": "integer", "minimum": 1, "maximum": 4},
                 "attemptRecordPath": {"type": "string", "minLength": 1},
                 "submissionState": {"enum": ["started", "submitting", "submitted", "unknown", "notSubmitted"]},
                 "phase": {"type": "string", "minLength": 1},
@@ -94,6 +97,9 @@
                 },
                 "identityAuditPath": {"type": ["string", "null"]},
                 "identityState": {"type": ["string", "null"], "enum": ["matched", "mismatch", "unverified", null]},
+                "scriptContentPresent": {"type": "boolean"},
+                "scriptContentSha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+                "observedIdentitySha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
                 "mismatchedFields": {"type": "array", "items": {"type": "string"}},
                 "errorCode": {"type": ["string", "null"]},
                 "submittedAt": {"type": ["string", "null"]}

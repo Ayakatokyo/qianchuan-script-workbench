@@ -12,7 +12,7 @@ from threading import Lock
 from typing import Any
 from date_policy import validate_period
 
-from qianchuan_script_acquisition_identity import audit_identity
+from qianchuan_script_acquisition_identity import audit_identity, content_evidence
 from qianchuan_script_acquisition_gate import FirstBatchCsvGate, GATE_FILENAME, assert_detail_rpa_not_paused
 from qianchuan_script_acquisition_contracts import AcquisitionRequest
 from qianchuan_script_acquisition_fact_pack import build_source_pack, extract_script_content, normalize_text, script_completeness
@@ -173,6 +173,7 @@ def _write_selection_pending(
     write_status(
         output_dir,
         "awaitingSelection",
+        identityRetryLimit=request.live_acquire.identity_retry_limit,
         errorCode=error_code,
         reportSnapshot=REPORT_SNAPSHOT_PATH,
         reportSnapshotSha256=snapshot_digest,
@@ -188,6 +189,7 @@ def _write_selection_pending(
             "schemaVersion": 1,
             "runId": Path(output_dir).name,
             "status": "awaitingSelection",
+            "identityRetryLimit": request.live_acquire.identity_retry_limit,
             "counts": {"requested": 0, "available": 0, "missing": 0, "failed": 0},
             "outputs": outputs,
         },
@@ -402,6 +404,9 @@ def _new_attempt_record(material_id: str, attempt: int, output_dir: Path) -> dic
         "payloadFiles": [],
         "identityAuditPath": None,
         "identityState": None,
+        "scriptContentPresent": False,
+        "scriptContentSha256": None,
+        "observedIdentitySha256": None,
         "mismatchedFields": [],
         "errorCode": None,
     }
@@ -495,6 +500,7 @@ def _process_result(
     attempt_number: int,
     prior_refs: list[str] | None = None,
     gate: FirstBatchCsvGate | None = None,
+    identity_retry_limit: int = 2,
 ) -> dict[str, Any]:
     material_id = _material_id(material)
     attempt_path = _attempt_path(output_dir, material_id, attempt_number)
@@ -532,6 +538,7 @@ def _process_result(
         attempt_path,
         identityAuditPath=identity_ref,
         identityState=identity["state"],
+        **content_evidence(records, identity),
         mismatchedFields=list(identity.get("mismatchedFields") or []),
         phase="identity_audited",
     )
@@ -539,12 +546,13 @@ def _process_result(
     script_records = [record for record in records if str(record.get("recordType") or "") == "script_analysis"]
     if identity["state"] != "matched":
         code = f"material_identity_{identity['state']}"
+        attempt = _update_attempt(attempt_path, errorCode=code)
         return {
             "state": "failed",
             "errorCode": code,
             "attempt": attempt,
             "scriptFact": {"parseStatus": "failed", "error": code, "sourceRefs": refs},
-            "retryEligible": identity["state"] == "mismatch" and attempt_number == 1,
+            "retryEligible": identity["state"] == "mismatch" and attempt_number <= identity_retry_limit,
         }
     if len(script_records) > 1:
         code = "ambiguous_script_records"
@@ -777,7 +785,8 @@ def acquire_scripts(
     script_facts: dict[str, dict[str, Any]] = {}
     hard_stop = False
     stop_reason: str | None = None
-    gate = FirstBatchCsvGate(output_dir, [_material_id(item) for item in selected_materials[:RPA_MAX_CONCURRENCY]]) if selected_materials else None
+    identity_retry_limit = request.live_acquire.identity_retry_limit
+    gate = FirstBatchCsvGate(output_dir, [_material_id(item) for item in selected_materials[:RPA_MAX_CONCURRENCY]], identity_retry_limit=identity_retry_limit) if selected_materials else None
 
     if selected_materials:
         try:
@@ -791,26 +800,36 @@ def acquire_scripts(
 
     scheduler_events: list[dict[str, Any]] = []
     task_queue: list[tuple[Any, int, list[str]]] = [(item, 1, []) for item in selected_materials]
+    retry_queue: list[tuple[Any, int, list[str]]] = []
+    identity_recovery = False
     active: dict[Any, tuple[Any, int, list[str]]] = {}
     submitted_count = 0
     active_count = 0
     scheduler_lock = Lock()
     if detail is not None:
         with ThreadPoolExecutor(max_workers=RPA_MAX_CONCURRENCY) as executor:
-            while task_queue or active:
-                while task_queue and len(active) < RPA_MAX_CONCURRENCY and not hard_stop:
+            while task_queue or retry_queue or active:
+                while (task_queue or retry_queue) and len(active) < (1 if identity_recovery else RPA_MAX_CONCURRENCY) and not hard_stop:
+                    # Once identity is suspect, drain all previously submitted
+                    # tasks. Recovery and remaining initial requests then share
+                    # a single slot for the rest of this run.
+                    if identity_recovery and active:
+                        break
+                    queue = retry_queue if retry_queue and (gate is None or gate.payload["status"] == "passed") else task_queue
+                    if not queue:
+                        break
                     # No rolling refill or identity retry until the first cohort
                     # is fully terminal and at least one actual CSV is verified.
-                    next_material, next_attempt, _ = task_queue[0]
+                    next_material, next_attempt, _ = queue[0]
                     if gate is not None and gate.payload["status"] != "passed" and (
                         next_attempt != 1 or _material_id(next_material) not in gate.payload["firstBatchMaterialIds"]
                     ):
                         break
-                    material, attempt_number, prior_refs = task_queue.pop(0)
+                    material, attempt_number, prior_refs = queue.pop(0)
                     material_id = _material_id(material)
                     if not material_id:
                         continue
-                    def record_submission(submitted_material_id: str, submitted_attempt: int, submitted_at: str) -> None:
+                    def record_submission(submitted_material_id: str, submitted_attempt: int, submitted_at: str, *, recovery_submission: bool = identity_recovery) -> None:
                         nonlocal submitted_count
                         with scheduler_lock:
                             submitted_count += 1
@@ -819,8 +838,9 @@ def acquire_scripts(
                                 "attempt": submitted_attempt,
                                 "submittedAt": submitted_at,
                                 "inFlight": active_count,
-                                "queued": len(task_queue),
-                                "reason": "identity_mismatch_retry" if submitted_attempt == 2 else "initial_queue",
+                                "queued": len(task_queue) + len(retry_queue),
+                                "reason": "identity_mismatch_retry" if submitted_attempt > 1 else "initial_queue",
+                                "identityRecovery": recovery_submission,
                             })
                     with scheduler_lock:
                         active_count += 1
@@ -832,7 +852,7 @@ def acquire_scripts(
                     active[future] = (material, attempt_number, prior_refs)
                     write_status(
                         output_dir, "rpaProcessing", currentMaterialId=material_id,
-                        maxConcurrency=RPA_MAX_CONCURRENCY, inFlight=len(active), queued=len(task_queue),
+                        maxConcurrency=RPA_MAX_CONCURRENCY, inFlight=len(active), queued=len(task_queue) + len(retry_queue),
                     )
                 if not active:
                     break
@@ -857,6 +877,7 @@ def acquire_scripts(
                                 material, result, rpa_gateway, output_dir, attempt_number,
                                 prior_refs=prior_refs,
                                 gate=gate,
+                                identity_retry_limit=identity_retry_limit,
                             )
                         except Exception:
                             attempt_path = _attempt_path(output_dir, material_id, attempt_number)
@@ -876,6 +897,8 @@ def acquire_scripts(
                     attempts = list(outcome.get("attempts", []))
                     attempt_path = _attempt_path(output_dir, material_id, attempt_number)
                     current_attempt = json.loads(attempt_path.read_text(encoding="utf-8"))
+                    if current_attempt.get("identityState") == "mismatch":
+                        identity_recovery = True
                     if attempt_number == 1:
                         attempts = [current_attempt]
                     else:
@@ -887,20 +910,24 @@ def acquire_scripts(
                             hard_stop = True
                             stop_reason = gate.payload["errorCode"]
                     script_facts[material_id] = processed["scriptFact"]
+                    # A later transport/local failure must not lose earlier
+                    # quarantined evidence from this material's source chain.
+                    script_facts[material_id]["sourceRefs"] = list(dict.fromkeys(
+                        prior_refs + list(script_facts[material_id].get("sourceRefs") or [])
+                    ))
                     if processed.get("retryEligible") and not hard_stop:
-                        task_queue.append((material, 2, _attempt_refs(processed["attempt"])))
+                        retry_queue.append((material, attempt_number + 1, list(script_facts[material_id]["sourceRefs"])))
                     elif processed.get("retryEligible"):
                         outcome["retrySuppressedReason"] = "global_hard_stop"
                     write_status(
                         output_dir, "rpaProcessing", currentMaterialId=material_id,
-                        maxConcurrency=RPA_MAX_CONCURRENCY, inFlight=active_count, queued=len(task_queue),
+                        maxConcurrency=RPA_MAX_CONCURRENCY, inFlight=active_count, queued=len(task_queue) + len(retry_queue),
                     )
                 if hard_stop:
                     # The active tasks are drained, but no queued first attempts or retries are started.
-                    while task_queue:
-                        material, attempt_number, _prior_refs = task_queue.pop(0)
-                        if attempt_number == 1:
-                            continue
+                    task_queue.clear()
+                    while retry_queue:
+                        material, attempt_number, _prior_refs = retry_queue.pop(0)
                         outcome = outcome_by_id[_material_id(material)]
                         outcome["retrySuppressedReason"] = "global_hard_stop"
                         outcome["state"] = "failed"
@@ -922,18 +949,21 @@ def acquire_scripts(
         if gate.payload["status"] != "passed":
             stop_reason = gate.payload["errorCode"]
             outcome_payload = _outcome_summary(outcomes, output_dir.name, "rpaPaused", stop_reason)
+            outcome_payload["identityRetryLimit"] = identity_retry_limit
             outcome_payload["firstBatchCsvGate"] = gate.payload
             outcome_payload["scheduler"] = {
                 "maxConcurrency": RPA_MAX_CONCURRENCY,
+                "effectiveConcurrency": 1 if identity_recovery else RPA_MAX_CONCURRENCY,
                 "submittedTaskCount": submitted_count,
                 "events": scheduler_events,
                 "underfillReason": "first_batch_csv_gate",
                 "hardStopObserved": True,
             }
             outcomes_path = atomic_json(output_dir / OUTCOMES_FILENAME, outcome_payload)
-            write_status(output_dir, "rpaPaused", errorCode=stop_reason, message=gate.payload["message"], gatePath=GATE_FILENAME)
+            write_status(output_dir, "rpaPaused", errorCode=stop_reason, message=gate.payload["message"], gatePath=GATE_FILENAME, identityRetryLimit=identity_retry_limit)
             write_receipt(output_dir, {
                 "schemaVersion": 1, "runId": output_dir.name, "status": "rpaPaused",
+                "identityRetryLimit": identity_retry_limit,
                 "counts": {"requested": len(outcomes), "available": outcome_payload["counts"]["available"],
                            "missing": outcome_payload["counts"]["submittedWithoutScript"] + outcome_payload["counts"]["unsubmitted"],
                            "failed": outcome_payload["counts"]["failed"] + outcome_payload["counts"]["submissionUnknown"]},
@@ -966,10 +996,12 @@ def acquire_scripts(
     failed_or_unsafe = any(item["state"] in {"failed", "submissionUnknown", "unsubmitted"} for item in outcomes)
     state = "partialFailed" if failed_or_unsafe else "ready"
     outcome_payload = _outcome_summary(outcomes, output_dir.name, state, stop_reason)
+    outcome_payload["identityRetryLimit"] = identity_retry_limit
     if gate is not None:
         outcome_payload["firstBatchCsvGate"] = gate.payload
     outcome_payload["scheduler"] = {
         "maxConcurrency": RPA_MAX_CONCURRENCY,
+        "effectiveConcurrency": 1 if identity_recovery else RPA_MAX_CONCURRENCY,
         "submittedTaskCount": submitted_count,
         "events": scheduler_events,
         "underfillReason": underfill_reason,
@@ -981,6 +1013,7 @@ def acquire_scripts(
         output_dir,
         state,
         runId=pack["runId"],
+        identityRetryLimit=identity_retry_limit,
         availability=pack["availability"],
         reportSnapshot=REPORT_SNAPSHOT_PATH,
         reportSnapshotSha256=report_receipt["snapshotSha256"],
@@ -992,6 +1025,7 @@ def acquire_scripts(
             "schemaVersion": 1,
             "runId": pack["runId"],
             "status": state,
+            "identityRetryLimit": identity_retry_limit,
             "counts": pack["availability"],
             "outputs": [
                 "facts/qianchuan-script-source-pack.json",

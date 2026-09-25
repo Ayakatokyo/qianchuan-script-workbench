@@ -8,6 +8,7 @@
     "state"
   ],
   "properties": {
+    "identityRetryLimit": {"type": "integer", "minimum": 0, "maximum": 3},
     "message": {"type": "string"},
     "gatePath": {"const": "first-batch-csv-gate.json"},
     "schemaVersion": {

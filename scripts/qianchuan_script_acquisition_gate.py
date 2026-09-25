@@ -44,7 +44,7 @@ def assert_detail_rpa_not_paused(output_dir: Path) -> None:
 
 
 class FirstBatchCsvGate:
-    def __init__(self, output_dir: Path, material_ids: list[str]):
+    def __init__(self, output_dir: Path, material_ids: list[str], *, identity_retry_limit: int = 2):
         if (
             not isinstance(material_ids, list) or not 1 <= len(material_ids) <= 3
             or any(not isinstance(mid, str) or not mid.strip() or mid != mid.strip() for mid in material_ids)
@@ -52,6 +52,9 @@ class FirstBatchCsvGate:
         ):
             raise ValueError("首批 CSV 门禁必须包含 1 至 3 个唯一、非空素材 ID")
         self.path = Path(output_dir) / GATE_FILENAME
+        if isinstance(identity_retry_limit, bool) or not isinstance(identity_retry_limit, int) or not 0 <= identity_retry_limit <= 3:
+            raise ValueError("identityRetryLimit must be an integer between 0 and 3")
+        self.max_attempts = 1 + identity_retry_limit
         self._submission_lock = Lock()
         self._claimed: set[tuple[str, int]] = set()
         if self.path.exists():
@@ -74,8 +77,8 @@ class FirstBatchCsvGate:
         atomic_json(self.path, self.payload)
 
     def assert_submission_allowed(self, material_id: str, attempt: int) -> None:
-        if not isinstance(attempt, int) or isinstance(attempt, bool) or attempt not in {1, 2}:
-            raise ValueError("RPA attempt must be 1 or 2")
+        if not isinstance(attempt, int) or isinstance(attempt, bool) or not 1 <= attempt <= self.max_attempts:
+            raise ValueError("RPA attempt exceeds the configured identity retry limit")
         status = self.payload["status"]
         if status == "passed":
             return

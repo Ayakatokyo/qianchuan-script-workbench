@@ -113,6 +113,52 @@ def _selection_summary(pack: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _delivery_details(run_dir: Path, script: Mapping[str, Any], outcome: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep rejected payload evidence separate from accepted script facts."""
+    error = outcome.get("errorCode") or script.get("error")
+    state = outcome.get("state")
+    if error in {"material_identity_mismatch", "material_identity_unverified"}:
+        delivery = "identityMismatch" if error.endswith("mismatch") else "identityUnverified"
+    elif state in {"submissionUnknown", "unsubmitted"}:
+        delivery = state
+    elif script.get("parseStatus") == "parsed" and _nonempty(script.get("rawText")):
+        delivery = "available"
+    elif script.get("parseStatus") == "failed" or state == "failed":
+        delivery = "failed"
+    else:
+        delivery = "missing"
+    evidence = []
+    for attempt in outcome.get("attempts") or []:
+        ref = attempt.get("identityAuditPath")
+        audit = {}
+        if ref:
+            path = (run_dir / ref).resolve()
+            if not path.is_relative_to(run_dir):
+                raise WorkbenchError("invalid_identity_path", "identity evidence must remain inside the run")
+            audit = _read_json(path)
+        evidence.append({
+            "attempt": attempt.get("attempt"), "identityState": attempt.get("identityState"),
+            "auditPath": ref, "expected": audit.get("expected", {}), "observed": audit.get("observed", {}),
+            "mismatchedFields": audit.get("mismatchedFields", []),
+            "scriptContentPresent": attempt.get("scriptContentPresent"),
+            "scriptContentSha256": attempt.get("scriptContentSha256"),
+            "observedIdentitySha256": attempt.get("observedIdentitySha256"),
+        })
+    presence = [item["scriptContentPresent"] for item in evidence]
+    returned = True if True in presence else (False if presence and all(value is False for value in presence) else None)
+    if delivery == "available":
+        returned = True
+    labels = {
+        "available": "已核验，可用", "missing": "平台未返回可用正文", "failed": "采集或解析失败",
+        "submissionUnknown": "任务状态未确认", "unsubmitted": "未提交采集",
+        "identityMismatch": "已返回脚本内容，但素材身份不一致，未采信" if returned else "返回内容身份不一致，未采信",
+        "identityUnverified": "返回内容缺少独立身份依据，未采信",
+    }
+    return {"deliveryStatus": delivery, "statusLabel": labels[delivery],
+            "returnedContentPresent": returned, "identityEvidence": evidence,
+            "recoveredAfterMismatch": delivery == "available" and any(item["identityState"] == "mismatch" for item in evidence)}
+
+
 def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
     run_dir = Path(run_dir).expanduser().resolve()
     status = _read_json(run_dir / "status.json")
@@ -138,6 +184,7 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
         material_id = str(material.get("materialId") or "")
         script = scripts.get(material_id, {})
         outcome = outcomes.get(material_id, {})
+        delivery = _delivery_details(run_dir, script, outcome)
         completeness = script.get("completeness") if isinstance(script.get("completeness"), Mapping) else {}
         text_available = script.get("parseStatus") == "parsed" and _nonempty(script.get("rawText"))
         field_available: dict[str, bool] = {}
@@ -157,6 +204,7 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
             "metrics": metric_values,
             "sourceRefs": list(material.get("sourceRefs") or []),
             "script": {
+                **delivery,
                 "scriptId": script.get("scriptId"),
                 "parseStatus": script.get("parseStatus", "missing"),
                 "textAvailable": text_available,
@@ -169,7 +217,7 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
             "errorCode": outcome.get("errorCode"),
         })
         if outcome and outcome.get("state") in {"failed", "submissionUnknown", "unsubmitted", "submittedWithoutScript"}:
-            failure_gaps.append({"materialId": material_id, "state": outcome.get("state"), "errorCode": outcome.get("errorCode")})
+            failure_gaps.append({"materialId": material_id, "state": outcome.get("state"), "errorCode": outcome.get("errorCode"), "deliveryStatus": delivery["deliveryStatus"], "message": delivery["statusLabel"]})
         elif script.get("parseStatus") in {"missing", "failed"}:
             failure_gaps.append({"materialId": material_id, "state": "scriptMissing" if script.get("parseStatus") == "missing" else "scriptFailed", "errorCode": script.get("error")})
     materials.sort(key=lambda item: (item.get("rank") or 0, item["materialId"]))
@@ -202,6 +250,8 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
             "submissionUnknown": count_by_outcome["submissionUnknown"],
             "unsubmitted": count_by_outcome["unsubmitted"],
             "failedMaterials": count_by_outcome["failed"],
+            "identityMismatchScripts": sum(item["script"]["deliveryStatus"] == "identityMismatch" for item in materials),
+            "identityRecoveredScripts": sum(item["script"]["recoveredAfterMismatch"] for item in materials),
         },
         "fieldAvailability": field_counts,
         "materials": materials,
@@ -241,6 +291,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
         f"- 选材口径：字段 ID `{(selection.get('rankingMetric') or {}).get('fieldId') or '未记录'}`（{(selection.get('rankingMetric') or {}).get('label') or '未记录'}；单位 `{(selection.get('rankingMetric') or {}).get('unit') or '源数据未提供'}`；方向 {selection.get('direction') or '未记录'}）/ TopN={selection.get('topN') or '未记录'}；筛选 `{json.dumps(selection.get('filters') or [], ensure_ascii=False)}`",
         f"- 完整报表行数：{counts.get('reportRows') if counts.get('reportRows') is not None else '未知'}；入选素材：{counts['selectedMaterials']}",
         f"- 脚本文本：可用 {counts['availableScripts']}，缺失 {counts['missingScripts']}，失败 {counts['failedScripts']}",
+        f"- 身份核对：不一致且未采信 {counts.get('identityMismatchScripts', 0)}，重试后恢复 {counts.get('identityRecoveredScripts', 0)}；未采信不等于平台没有脚本。",
         f"- 内容公式：可用 {summary['fieldAvailability']['formula']['available']}，缺失 {summary['fieldAvailability']['formula']['missing']}；detail：可用 {summary['fieldAvailability']['detail']['available']}，缺失 {summary['fieldAvailability']['detail']['missing']}；data：可用 {summary['fieldAvailability']['data']['available']}，缺失 {summary['fieldAvailability']['data']['missing']}",
         "",
         "## 素材明细",
@@ -259,7 +310,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
         if text_excerpt:
             text_cell = f"{text_excerpt} [{fact_path}]"
         else:
-            text_cell = f"未提供；[{fact_path}]"
+            text_cell = f"{script.get('statusLabel', '未提供')}；[{fact_path}]"
         source_refs = list(item.get("sourceRefs") or []) + list(script.get("sourceRefs") or [])
         source_labels = ", ".join(_source_ref_label(value) for value in source_refs) or "来源未记录"
         text_cell += f"；来源：{source_labels}"
@@ -268,7 +319,15 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
             metric_display = "选材指标未记录"
         else:
             metric_display = str(metric) if metric is not None else "该素材指标缺失"
-        lines.append(f"{item['rank']} | `{item['materialId']}` | {metric_display} | {script['parseStatus']} | {structure} | {text_cell}")
+        lines.append(f"{item['rank']} | `{item['materialId']}` | {metric_display} | {script.get('statusLabel', script['parseStatus'])} | {structure} | {text_cell}")
+    lines.extend(["", "## 素材身份核对证据", ""])
+    for item in summary["materials"]:
+        for evidence in item["script"].get("identityEvidence", []):
+            if evidence.get("identityState") not in {"mismatch", "unverified"}:
+                continue
+            lines.append(f"- 素材 `{item['materialId']}` 第 {evidence.get('attempt')} 次：{evidence['identityState']}；不一致字段 `{', '.join(evidence.get('mismatchedFields') or [])}`。")
+            lines.append(f"  期望身份：`{json.dumps(evidence.get('expected'), ensure_ascii=False)}`；返回身份：`{json.dumps(evidence.get('observed'), ensure_ascii=False)}`。")
+            lines.append(f"  身份核对文件：`{evidence.get('auditPath') or '未记录'}`；脚本内容指纹：`{evidence.get('scriptContentSha256') or '旧记录未提供'}`。原始载荷仅用于核对，不作为该素材脚本事实。")
     lines.extend(["", "## 重复正文", ""])
     groups = summary.get("duplicateTextGroups") or []
     if not groups:
@@ -280,7 +339,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
     lines.extend(["", "## 失败与缺口", ""])
     if summary.get("gaps"):
         for gap in summary["gaps"]:
-            lines.append(f"- `{gap['materialId']}`：{gap['state']}；错误码 `{gap.get('errorCode') or '未提供'}`")
+            lines.append(f"- `{gap['materialId']}`：{gap.get('message') or gap['state']}；错误码 `{gap.get('errorCode') or '未提供'}`")
     else:
         lines.append("未记录失败、未知或未提交素材。")
     lines.extend([

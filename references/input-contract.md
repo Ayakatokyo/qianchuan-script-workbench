@@ -43,3 +43,7 @@ python "$SKILL_ROOT/scripts/run.py" verify --path "$RUN_DIR/analysis/$ANALYSIS_I
 `prepare-analysis` 校验阶段一交接文件、事实包、Schema、哈希、素材身份和字段来源；随后只写用户选定的最小事实切片、模型输入与 prompt 快照。模型结果必须符合 `script-analysis-result.schema.json`，逐条结论使用素材、字段和 sourceRefs 组成的证据引用。
 
 生成请求校验 `script-generation-request.schema.json`，并要求 `customerFacts`、`businessMethod`、`target`；改写请求校验 `script-rewrite-request.schema.json`，并额外要求非空 `originalText`、`immutableItems`、`deleteItems` 和 `strength`。两个请求都绑定当前阶段一交接和 source pack，并复用旧的生成/改写校验器；不得将改写缺少原稿自动转换为生成。
+
+## 身份错配恢复配置
+
+内部实时输入 `liveAcquire.identityRetryLimit` 是额外重试上限，整数 0–3，默认 2（最多 3 次提交）；显式 3 时最多 4 次。布尔值、小数和超界值拒绝。此项不改变五项业务表单、报表口径或第二阶段输入。仅已结束的身份错配可重试，发生错配后先收齐在途任务，再串行执行余下队列；首批暂停或任务状态未知均阻断重试。

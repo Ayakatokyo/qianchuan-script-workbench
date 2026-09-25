@@ -16,7 +16,8 @@
       "properties": {
         "apiShop": {"type": "string", "minLength": 1}, "advertiserId": {"type": "string", "minLength": 1},
         "rpaShop": {"type": "string", "minLength": 1}, "topN": {"type": "integer", "minimum": 1},
-        "timeoutSec": {"type": "integer", "minimum": 1}, "materialFilterSort": {"type": "object"}
+        "timeoutSec": {"type": "integer", "minimum": 1}, "materialFilterSort": {"type": "object"},
+        "identityRetryLimit": {"type": "integer", "minimum": 0, "maximum": 3, "default": 2}
       }
     },
     "verifiedRun": {

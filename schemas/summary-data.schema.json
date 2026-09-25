@@ -22,7 +22,9 @@
         "submittedWithoutScript": {"type": "integer", "minimum": 0},
         "submissionUnknown": {"type": "integer", "minimum": 0},
         "unsubmitted": {"type": "integer", "minimum": 0},
-        "failedMaterials": {"type": "integer", "minimum": 0}
+        "failedMaterials": {"type": "integer", "minimum": 0},
+        "identityMismatchScripts": {"type": "integer", "minimum": 0},
+        "identityRecoveredScripts": {"type": "integer", "minimum": 0}
       }
     },
     "fieldAvailability": {

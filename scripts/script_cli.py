@@ -14,8 +14,10 @@ import uuid
 from typing import Any, Mapping
 
 from qianchuan_script_acquisition_contracts import AcquisitionRequest
+from qianchuan_script_acquisition_identity import audit_identity, content_evidence
+from qianchuan_script_acquisition_csv_parser import RpaCsvError, parse_diagnosis_csv
 from qianchuan_script_acquisition_gate import RpaPausedError, assert_detail_rpa_not_paused
-from qianchuan_script_acquisition_field_registry import QueryError, load_field_registry
+from qianchuan_script_acquisition_field_registry import QueryError, load_field_registry, _value_at
 from qianchuan_script_acquisition_pipeline import (
     OUTCOMES_FILENAME,
     REPORT_SNAPSHOT_PATH,
@@ -24,6 +26,7 @@ from qianchuan_script_acquisition_pipeline import (
     acquire_scripts,
     continue_acquire_scripts,
     inspect_pending_report,
+    _record_payload,
 )
 from qianchuan_script_acquisition_report_client import (
     ReportClientError,
@@ -177,6 +180,7 @@ def _normalize_acquisition_payload(payload: dict[str, Any]) -> dict[str, Any]:
     public_to_internal = {
         "api_shop": "apiShop", "advertiser_id": "advertiserId", "rpa_shop": "rpaShop",
         "top_n": "topN", "material_filter_sort": "materialFilterSort",
+        "identity_retry_limit": "identityRetryLimit",
     }
     live = {internal: payload[key] for key, internal in public_to_internal.items() if key in payload}
     for key in ("apiShop", "rpaShop"):
@@ -222,6 +226,7 @@ def _describe_acquire(_args: argparse.Namespace) -> dict[str, Any]:
             {"path": "liveAcquire.apiShop", "type": "string", "required": True},
             {"path": "liveAcquire.rpaShop", "type": "string", "required": True},
             {"path": "liveAcquire.topN", "type": "integer", "required": False, "default": 10, "minimum": 1},
+            {"path": "liveAcquire.identityRetryLimit", "type": "integer", "required": False, "default": 2, "minimum": 0, "maximum": 3},
             {
                 "path": "liveAcquire.materialFilterSort",
                 "type": "object",
@@ -251,6 +256,7 @@ def _describe_acquire(_args: argparse.Namespace) -> dict[str, Any]:
             "api_shop": "liveAcquire.apiShop", "rpa_shop": "liveAcquire.rpaShop",
             "date_range": "period", "top_n": "liveAcquire.topN",
             "material_filter_sort": "liveAcquire.materialFilterSort",
+            "identity_retry_limit": "liveAcquire.identityRetryLimit",
         },
         "firstBatchCsvGate": {"maxBatchSize": 3, "requiresActualCsv": True, "noValidCsv": "rpaPaused", "unknownResult": "rpaPaused"},
         "externalCalls": False,
@@ -301,6 +307,7 @@ def _preview_acquire(args: argparse.Namespace) -> dict[str, Any]:
                 "selectionAffectsPayload": False,
             },
             "maxConcurrentRpaTasks": 3,
+            "identityRetryLimit": request.live_acquire.identity_retry_limit,
             "externalCalls": False,
         }
     resolved_filters = []
@@ -337,6 +344,7 @@ def _preview_acquire(args: argparse.Namespace) -> dict[str, Any]:
             "selectionAffectsPayload": False,
         },
         "maxConcurrentRpaTasks": 3,
+        "identityRetryLimit": request.live_acquire.identity_retry_limit,
         "externalCalls": False,
     }
 
@@ -615,11 +623,21 @@ def _verify_csv_gate(path: Path, outcomes: dict[str, Any]) -> dict[str, Any]:
     return gate
 
 
+def _verify_retry_limit(*evidence: Mapping[str, Any]) -> int:
+    if not any("identityRetryLimit" in item for item in evidence):
+        return 1  # Historical runs allowed exactly one additional attempt.
+    limits = [item.get("identityRetryLimit") for item in evidence]
+    if any(isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 3 for value in limits) or len(set(limits)) != 1:
+        raise CliError("retry_policy_mismatch", "identity retry limit differs across acquisition evidence")
+    return limits[0]
+
+
 def _verify_paused_acquisition(path: Path, status: dict[str, Any]) -> dict[str, Any]:
     outcomes = _read_json(path / OUTCOMES_FILENAME)
     receipt = _read_json(path / "acquisition-receipt.json")
     validate_payload(outcomes, "acquisition-results.schema.json")
     validate_payload(receipt, "script-acquisition-receipt.schema.json")
+    _verify_retry_limit(status, outcomes, receipt)
     gate = _verify_csv_gate(path, outcomes)
     if (
         gate["status"] not in {"pending", "blocked", "unconfirmed"}
@@ -705,6 +723,7 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
         report_receipt = _read_json(path / "report-query-receipt.json")
         pending = _read_json(path / "selection-pending.json")
         validate_payload(receipt, "script-acquisition-receipt.schema.json")
+        _verify_retry_limit(status, receipt)
         validate_payload(report_receipt, "qianchuan-report-query-receipt.schema.json")
         validate_payload(pending, "qianchuan-selection-pending.schema.json")
         snapshot_path = (path / report_receipt["snapshotPath"]).resolve()
@@ -822,6 +841,10 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
         if outcome_file.is_file():
             outcomes = _read_json(outcome_file)
             validate_payload(outcomes, "acquisition-results.schema.json")
+            identity_retry_limit = _verify_retry_limit(status, outcomes, receipt)
+            has_content_evidence = "identityRetryLimit" in outcomes
+            material_id_entry = _field_registry().require("material_id")
+            report_rows = {str(_value_at(row, material_id_entry) or "").strip(): row for row in snapshot["rows"]}
             if OUTCOMES_FILENAME not in receipt["outputs"]:
                 raise CliError("missing_outcome_receipt", "acquisition results are not listed in the receipt")
             if outcomes["runId"] != status["runId"] or outcomes["status"] != status["state"]:
@@ -859,14 +882,13 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
                 if script["parseStatus"] != expected_parse_status:
                     raise CliError("status_mismatch", "source script status differs from acquisition outcome")
                 attempts = outcome["attempts"]
-                if len(attempts) > 2 or [item["attempt"] for item in attempts] != list(range(1, len(attempts) + 1)):
+                if len(attempts) > 1 + identity_retry_limit or [item["attempt"] for item in attempts] != list(range(1, len(attempts) + 1)):
                     raise CliError("attempt_mismatch", "acquisition attempt sequence is invalid")
                 if outcome["state"] == "unsubmitted" and attempts:
                     raise CliError("attempt_mismatch", "unsubmitted material has attempt evidence")
                 material_evidence_refs: list[str] = []
                 attempt_evidence_refs: dict[int, set[str]] = {}
-                if len(attempts) == 2:
-                    first = attempts[0]
+                for first in attempts[:-1]:
                     if not (
                         first["identityState"] == "mismatch"
                         and first["taskState"] == "completed"
@@ -874,8 +896,9 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
                         and first["payloadSha256"]
                         and first["identityAuditPath"]
                     ):
-                        raise CliError("unsafe_retry", "second attempt lacks terminal mismatch evidence")
+                        raise CliError("unsafe_retry", "retry lacks preceding terminal mismatch evidence")
                 for attempt in attempts:
+                    csv_records = []
                     this_attempt_refs = set(
                         [attempt["attemptRecordPath"]]
                         + ([attempt["taskRecordPath"]] if attempt.get("taskRecordPath") else [])
@@ -905,6 +928,13 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
                                 validate_payload(normalized_records, "qianchuan-script-attempt-records.schema.json")
                             except Exception as exc:
                                 raise CliError("invalid_records_json", "normalized RPA records JSON is invalid") from exc
+                        elif has_content_evidence and payload_file["kind"] == "csv":
+                            try:
+                                csv_records.extend(_record_payload(record) for record in parse_diagnosis_csv(payload_path))
+                            except RpaCsvError:
+                                # Acquisition keeps malformed attachments as evidence
+                                # while admitting a separate valid CSV if one exists.
+                                pass
                     combined = hashlib.sha256(json.dumps(
                         [{"path": item["path"], "sha256": item["sha256"]} for item in attempt["payloadFiles"]],
                         ensure_ascii=False, sort_keys=True, separators=(",", ":"),
@@ -920,8 +950,22 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
                             or identity.get("mismatchedFields") != attempt["mismatchedFields"]
                         ):
                             raise CliError("identity_mismatch", "identity audit differs from attempt record")
+                        if has_content_evidence:
+                            expected_row = report_rows.get(material_id)
+                            if expected_row is None:
+                                raise CliError("identity_mismatch", "identity audit material is absent from report snapshot")
+                            recomputed_identity = audit_identity({**expected_row, "materialId": material_id}, csv_records)
+                            if identity != recomputed_identity:
+                                raise CliError("identity_mismatch", "identity audit differs from report and returned CSV")
+                            fingerprints = content_evidence(csv_records, recomputed_identity)
+                            if any(attempt.get(key) != value for key, value in fingerprints.items()):
+                                raise CliError("content_fingerprint_mismatch", "returned content fingerprint differs from CSV evidence")
                     elif attempt["identityState"] is not None:
                         raise CliError("identity_mismatch", "identity state has no persisted audit")
+                    elif has_content_evidence and any(attempt.get(key) != value for key, value in {
+                        "scriptContentPresent": False, "scriptContentSha256": None, "observedIdentitySha256": None,
+                    }.items()):
+                        raise CliError("content_fingerprint_mismatch", "content fingerprint exists without an identity audit")
                 if not set(material_evidence_refs).issubset(set(script["sourceRefs"])):
                     raise CliError("missing_evidence_reference", "source script does not reference all acquisition attempt evidence")
                 if "scheduler" in outcomes and (script.get("materialFile") or script.get("parseStatus") == "parsed"):
@@ -983,6 +1027,19 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
                     raise CliError("scheduler_mismatch", "scheduler exceeded the three task limit")
                 if not scheduler.get("underfillReason"):
                     raise CliError("scheduler_mismatch", "scheduler receipt omits the underfill reason")
+                if has_content_evidence:
+                    mismatch_seen = any(attempt.get("identityState") == "mismatch" for item in outcomes["materials"] for attempt in item["attempts"])
+                    if scheduler.get("effectiveConcurrency") != (1 if mismatch_seen else 3):
+                        raise CliError("scheduler_mismatch", "identity recovery concurrency differs from mismatch evidence")
+                    recovery_started = False
+                    for event in scheduler["events"]:
+                        if event.get("attempt", 1) > 1 and not event.get("identityRecovery"):
+                            raise CliError("scheduler_mismatch", "identity retry was not isolated")
+                        if recovery_started and not event.get("identityRecovery"):
+                            raise CliError("scheduler_mismatch", "scheduler left serial identity recovery")
+                        recovery_started = recovery_started or bool(event.get("identityRecovery"))
+                        if recovery_started and event["inFlight"] != 1:
+                            raise CliError("scheduler_mismatch", "identity recovery submitted overlapping tasks")
             expected_partial = any(state_counts[key] for key in ("failed", "submissionUnknown", "unsubmitted"))
             checked.append(OUTCOMES_FILENAME)
         if expected_partial != (status["state"] == "partialFailed"):
