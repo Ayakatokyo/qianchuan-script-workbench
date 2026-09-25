@@ -14,7 +14,7 @@ import uuid
 from typing import Any, Mapping
 
 from qianchuan_script_acquisition_contracts import AcquisitionRequest
-from qianchuan_script_acquisition_identity import audit_identity, content_evidence
+from qianchuan_script_acquisition_identity import RETURNED_ID_POLICY, audit_identity, content_evidence
 from qianchuan_script_acquisition_csv_parser import RpaCsvError, parse_diagnosis_csv
 from qianchuan_script_acquisition_gate import RpaPausedError, assert_detail_rpa_not_paused
 from qianchuan_script_acquisition_field_registry import QueryError, load_field_registry, _value_at
@@ -954,7 +954,13 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
                             expected_row = report_rows.get(material_id)
                             if expected_row is None:
                                 raise CliError("identity_mismatch", "identity audit material is absent from report snapshot")
-                            recomputed_identity = audit_identity({**expected_row, "materialId": material_id}, csv_records)
+                            policy = identity.get("identityPolicy")
+                            if policy not in (None, RETURNED_ID_POLICY):
+                                raise CliError("identity_mismatch", "unknown identity policy in persisted audit")
+                            # Reproduce the archived policy, including its exact
+                            # observed fields, so older fingerprints remain valid.
+                            recomputed_identity = audit_identity({**expected_row, "materialId": material_id}, csv_records,
+                                                                 include_returned_id=policy == RETURNED_ID_POLICY)
                             if identity != recomputed_identity:
                                 raise CliError("identity_mismatch", "identity audit differs from report and returned CSV")
                             fingerprints = content_evidence(csv_records, recomputed_identity)

@@ -2,6 +2,7 @@
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
+import re
 from typing import Any, Mapping
 
 from qianchuan_script_acquisition_fact_pack import extract_script_content, normalize_text
@@ -11,6 +12,7 @@ ALIASES = {
     "createTime": ("createTime", "create_time", "material_create_time_v2", "素材创建时间"),
     "videoDuration": ("videoDuration", "video_duration", "视频时长"),
 }
+RETURNED_ID_POLICY = "metadata_and_returned_id_v2"
 
 
 def _get(row, aliases):
@@ -63,13 +65,21 @@ def content_evidence(records: list[dict], identity: Mapping[str, Any]) -> dict:
     }
 
 
-def audit_identity(material: Any, records: list[dict]) -> dict:
+def audit_identity(material: Any, records: list[dict], *, include_returned_id: bool = True) -> dict:
     expected = material if isinstance(material, Mapping) else material.source_row
     material_id = str(material.get("materialId") or material.get("material_id") or "") if isinstance(material, Mapping) else material.material_id
     observed_ids = {str(r.get("materialId")) for r in records if r.get("materialId")}
     mismatches = ["materialId"] if observed_ids - {material_id} else []
     expected_values = {key: _get(expected, aliases) for key, aliases in ALIASES.items()}
     observed_values = {key: sorted({v for r in records if (v := _get(r, aliases)) is not None}) for key, aliases in ALIASES.items()}
+    if include_returned_id:
+        # This page label is independent of the connector's echoed materialId.
+        # Unknown formats are retained for inspection, never guessed as IDs.
+        returned_tags = sorted({str(r["materialIdTag"]).strip() for r in records
+                                if r.get("materialIdTag") is not None and str(r["materialIdTag"]).strip()})
+        expected_values["materialIdTag"] = material_id
+        observed_values["materialIdTag"] = sorted({match.group(1) for tag in returned_tags
+            if (match := re.fullmatch(r"(?:ID：\s*)?([0-9]+)", tag))})
     compared = []
     for key, value in expected_values.items():
         values = observed_values[key]
@@ -87,5 +97,8 @@ def audit_identity(material: Any, records: list[dict]) -> dict:
         if not all(same(other) for other in values):
             mismatches.append(key)
     state = "mismatch" if mismatches else ("matched" if compared else "unverified")
-    return {"state": state, "materialId": material_id, "expected": expected_values, "observed": observed_values,
-            "observedMaterialIds": sorted(observed_ids), "comparedFields": compared, "mismatchedFields": mismatches}
+    result = {"state": state, "materialId": material_id, "expected": expected_values, "observed": observed_values,
+              "observedMaterialIds": sorted(observed_ids), "comparedFields": compared, "mismatchedFields": mismatches}
+    if include_returned_id:
+        result.update(identityPolicy=RETURNED_ID_POLICY, returnedMaterialIdTags=returned_tags)
+    return result
