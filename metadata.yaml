@@ -1,0 +1,77 @@
+short-description: "先取得并汇总千川素材脚本，再按用户目标分析、生成或改写"
+tags:
+  - 千川
+  - 短视频脚本
+  - 脚本分析
+compatibility:
+  - content-writing
+  - data-analysis
+market:
+  title: "千川素材脚本工作台"
+  summary: "取数后先交付可追溯的素材脚本汇总，再由用户决定分析、生成或改写。"
+  category:
+    key: short_video_content
+    label: 短视频内容
+  badges:
+    - label: 千川
+      tone: blue
+  examples:
+    - title: 取数后先看汇总
+      prompt: "获取指定周期的千川素材脚本与指标，核对来源和缺口，生成汇总报告后先等待我确认分析目标。"
+    - title: 自定义脚本分析
+      prompt: "基于本轮已验证事实包，对比我指定素材的内容公式、脚本文本和指标，并为每条结论提供字段来源。"
+    - title: 复用事实包生成或改写
+      prompt: "复用本轮千川脚本事实包，依据客户确认资料生成新稿，或按我提供的原稿约束进行改写。"
+# 需与 SKILL.md frontmatter 的 metadata.pre_input 完全一致；__field 标记按 skill_form 渲染为表单控件。
+pre_input: |
+  请采集千川素材脚本数据：
+  千川授权店铺：__field:api_shop__（必填）
+  千川广告主ID：__field:rpa_shop__（必填）
+  时间范围：__field:date_range__（必填）
+  脚本素材数：__field:top_n__（必填）
+  素材筛选与排序：__field:material_filter_sort__（可选）
+skill_form:
+  - key: api_shop
+    type: api_shop
+    label: 千川授权店铺
+    description: 从千川 API 已授权店铺中选择；只用于第一步素材报表查询
+    application_id: OCEANENGINE
+    multiple: false
+    required: true
+  - key: rpa_shop
+    type: rpa_shop
+    label: 千川广告主ID
+    description: 选择已授权的 RPA 账号；执行前核对该账号对应的广告主属于所选 API 店铺，授权项 ID 仅用于逐素材诊断
+    application_id: RPA_JULIANG_QC
+    value_format: both
+    multiple: false
+    required: true
+  - key: date_range
+    type: daterange
+    label: 时间范围
+    description: 对应起止日期，日期格式为 YYYY-MM-DD；不含执行日和前一日
+    placeholder: "开始日期,结束日期"
+    format: YYYY-MM-DD
+    value_format: YYYY-MM-DD
+    max_policy: t_plus_2
+    required: true
+  - key: top_n
+    type: number
+    label: 脚本素材数
+    description: 本步需要取得参考脚本和素材表现数据的素材数量
+    default: 10
+    min: 1
+    step: 1
+    precision: 0
+    addon_after: 条
+    required: true
+  - key: material_filter_sort
+    type: textarea
+    label: 素材筛选与排序
+    description: 选填；使用 describe-acquire 列出的字段。未知口径会先保存完整报表并等待确认，不启动详情 RPA，也不会自动映射到其他指标。
+    rows: 3
+    required: false
+interface:
+  display_name: "千川素材脚本工作台"
+  short_description: "千川脚本事实汇总与用户主导的分析、生成和改写"
+  default_prompt: "使用 $千川素材脚本工作台 获取并汇总千川素材脚本，然后等待我选择分析、生成或改写。"

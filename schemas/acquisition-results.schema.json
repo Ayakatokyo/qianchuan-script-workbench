@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "status", "counts", "materials"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "status": {"enum": ["ready", "partialFailed"]},
+    "stopReason": {"type": "string"},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested", "taskSubmissions", "available", "submittedWithoutScript", "failed", "submissionUnknown", "unsubmitted"],
+      "properties": {
+        "requested": {"type": "integer", "minimum": 0},
+        "taskSubmissions": {"type": "integer", "minimum": 0},
+        "available": {"type": "integer", "minimum": 0},
+        "submittedWithoutScript": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "submissionUnknown": {"type": "integer", "minimum": 0},
+        "unsubmitted": {"type": "integer", "minimum": 0}
+      }
+    },
+    "scheduler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxConcurrency", "submittedTaskCount", "events", "underfillReason", "hardStopObserved"],
+      "properties": {
+        "maxConcurrency": {"const": 3},
+        "submittedTaskCount": {"type": "integer", "minimum": 0},
+        "underfillReason": {"type": "string", "minLength": 1},
+        "hardStopObserved": {"type": "boolean"},
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["materialId", "attempt", "submittedAt", "inFlight", "queued", "reason"],
+            "properties": {
+              "materialId": {"type": "string", "minLength": 1},
+              "attempt": {"type": "integer", "minimum": 1, "maximum": 2},
+              "submittedAt": {"type": "string"},
+              "inFlight": {"type": "integer", "minimum": 1, "maximum": 3},
+              "queued": {"type": "integer", "minimum": 0},
+              "reason": {"enum": ["initial_queue", "identity_mismatch_retry"]}
+            }
+          }
+        }
+      }
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["materialId", "rank", "state", "attempts"],
+        "properties": {
+          "materialId": {"type": "string", "minLength": 1},
+          "rank": {"type": "integer", "minimum": 1},
+          "state": {"enum": ["available", "submittedWithoutScript", "failed", "submissionUnknown", "unsubmitted"]},
+          "errorCode": {"type": "string"},
+          "retrySuppressedReason": {"type": "string"},
+          "attempts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["schemaVersion", "materialId", "attempt", "attemptRecordPath", "submissionState", "phase", "taskGroupId", "taskState", "taskRecordPath", "payloadSha256", "payloadFiles", "identityAuditPath", "identityState", "mismatchedFields", "errorCode"],
+              "properties": {
+                "schemaVersion": {"const": 1},
+                "materialId": {"type": "string", "minLength": 1},
+                "attempt": {"type": "integer", "minimum": 1, "maximum": 2},
+                "attemptRecordPath": {"type": "string", "minLength": 1},
+                "submissionState": {"enum": ["started", "submitting", "submitted", "unknown", "notSubmitted"]},
+                "phase": {"type": "string", "minLength": 1},
+                "taskGroupId": {"type": ["string", "null"]},
+                "taskState": {"enum": ["notStarted", "running", "completed", "failed", "unknown"]},
+                "taskRecordPath": {"type": ["string", "null"]},
+                "payloadSha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+                "payloadFiles": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["path", "sha256", "kind"],
+                    "properties": {
+                      "path": {"type": "string", "minLength": 1},
+                      "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                      "kind": {"enum": ["records-json", "csv"]}
+                    }
+                  }
+                },
+                "identityAuditPath": {"type": ["string", "null"]},
+                "identityState": {"type": ["string", "null"], "enum": ["matched", "mismatch", "unverified", null]},
+                "mismatchedFields": {"type": "array", "items": {"type": "string"}},
+                "errorCode": {"type": ["string", "null"]},
+                "submittedAt": {"type": ["string", "null"]}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

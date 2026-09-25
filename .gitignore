@@ -1,0 +1,21 @@
+# Generated packages and local execution data.
+dist/
+runs/
+secondary/
+.cache/
+.venv*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+.env
+.env.*
+*.log
+*.tmp
+# Original customer media and model downloads stay outside source control.
+*.mp4
+*.mov
+*.mp3
+*.wav
+*.onnx
+*.bin

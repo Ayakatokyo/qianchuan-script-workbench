@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "complete", "recordCount", "rowsSha256", "queryFingerprint", "scopeFingerprint", "rows"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "complete": {"const": true},
+    "recordCount": {"type": "integer", "minimum": 0},
+    "rowsSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "queryFingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "scopeFingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "rows": {"type": "array", "items": {"type": "object"}}
+  }
+}

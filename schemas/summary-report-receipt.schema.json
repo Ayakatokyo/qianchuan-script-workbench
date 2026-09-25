@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "acquisitionState", "sourcePackSha256", "summarySha256", "reportSha256", "outputs"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "acquisitionState": {"enum": ["ready", "partialFailed"]},
+    "sourcePackSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "summarySha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "reportSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "outputs": {"type": "array", "minItems": 2, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"type": "string"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}}
+  }
+}

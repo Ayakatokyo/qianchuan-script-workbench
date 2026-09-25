@@ -1,0 +1,4 @@
+interface:
+  display_name: "千川素材脚本工作台"
+  short_description: "先汇总千川脚本事实，再按用户目标分析、生成或改写"
+  default_prompt: "使用 $千川素材脚本工作台 获取并汇总千川素材脚本，然后等待我选择分析、生成或改写。"

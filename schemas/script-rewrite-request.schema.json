@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "analysisId", "sourcePack", "originalText", "customerFacts", "businessMethod", "immutableItems", "deleteItems", "strength", "target"],
+  "properties": {
+    "schemaVersion": {"const": 1}, "runId": {"type": "string", "minLength": 1}, "analysisId": {"type": "string", "minLength": 1}, "sourcePack": {"type": "string", "minLength": 1}, "originalText": {"type": "string", "minLength": 1}, "customerFacts": {"type": "object"}, "businessMethod": {"type": "string", "minLength": 1}, "immutableItems": {"type": "array", "items": {"type": "string"}}, "deleteItems": {"type": "array", "items": {"type": "string"}}, "strength": {"enum": ["light", "medium", "strong"]}, "target": {"type": "object"}
+  }
+}

@@ -1,0 +1,657 @@
+{
+  "schemaVersion": 1,
+  "skillId": "qianchuan-script-workbench",
+  "sourceRepository": "Ayakatokyo/qianchuan-yuntu-ai-short-video-skills",
+  "sourceCommit": "ab7e68049155336e774437f8e342e8f7c3272648",
+  "sourceProjectRoot": "/Users/shuzida/Desktop/skill统一管理/项目管理/develop/ai-short-video-skills",
+  "capturedAt": "2026-09-25T11:26:49.841648+08:00",
+  "originalManifest": {
+    "package": "qianchuan-script-workbench",
+    "files": [
+      {
+        "source": "skills/qianchuan-script-workbench/MAINTENANCE.md",
+        "destination": "MAINTENANCE.md"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/SKILL.md",
+        "destination": "SKILL.md"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/agents/openai.yaml",
+        "destination": "agents/openai.yaml"
+      },
+      {
+        "source": "config/asset-field-registry-v1.json",
+        "destination": "config/asset-field-registry-v1.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/metadata.yaml",
+        "destination": "metadata.yaml"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/references/input-contract.md",
+        "destination": "references/input-contract.md"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/references/output-contract.md",
+        "destination": "references/output-contract.md"
+      },
+      {
+        "source": "requirements-batch3.txt",
+        "destination": "requirements.txt"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/acquisition-results.schema.json",
+        "destination": "schemas/acquisition-results.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/analysis-handoff.schema.json",
+        "destination": "schemas/analysis-handoff.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/generated-scripts.schema.json",
+        "destination": "schemas/generated-scripts.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/qianchuan-material-report-snapshot.schema.json",
+        "destination": "schemas/qianchuan-material-report-snapshot.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/qianchuan-material-selection-audit.schema.json",
+        "destination": "schemas/qianchuan-material-selection-audit.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/qianchuan-report-query-receipt.schema.json",
+        "destination": "schemas/qianchuan-report-query-receipt.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/qianchuan-script-acquisition-input.schema.json",
+        "destination": "schemas/qianchuan-script-acquisition-input.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/qianchuan-script-attempt-records.schema.json",
+        "destination": "schemas/qianchuan-script-attempt-records.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/qianchuan-script-material-fact.schema.json",
+        "destination": "schemas/qianchuan-script-material-fact.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/qianchuan-script-source-pack.schema.json",
+        "destination": "schemas/qianchuan-script-source-pack.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/qianchuan-selection-pending.schema.json",
+        "destination": "schemas/qianchuan-selection-pending.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/rewritten-script.schema.json",
+        "destination": "schemas/rewritten-script.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/script-acquisition-receipt.schema.json",
+        "destination": "schemas/script-acquisition-receipt.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/script-analysis-input.schema.json",
+        "destination": "schemas/script-analysis-input.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/script-analysis-model-input.schema.json",
+        "destination": "schemas/script-analysis-model-input.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/script-analysis-plan.schema.json",
+        "destination": "schemas/script-analysis-plan.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/script-analysis-receipt.schema.json",
+        "destination": "schemas/script-analysis-receipt.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/script-analysis-result.schema.json",
+        "destination": "schemas/script-analysis-result.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/script-generation-request.schema.json",
+        "destination": "schemas/script-generation-request.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/script-rewrite-request.schema.json",
+        "destination": "schemas/script-rewrite-request.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/script-run-status.schema.json",
+        "destination": "schemas/script-run-status.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/summary-data.schema.json",
+        "destination": "schemas/summary-data.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/summary-report-receipt.schema.json",
+        "destination": "schemas/summary-report-receipt.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/workbench-analysis-receipt.schema.json",
+        "destination": "schemas/workbench-analysis-receipt.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/workbench-analysis-request.schema.json",
+        "destination": "schemas/workbench-analysis-request.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/schemas/workbench-operation-status.schema.json",
+        "destination": "schemas/workbench-operation-status.schema.json"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/errors.py",
+        "destination": "scripts/errors.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/http_transport.py",
+        "destination": "scripts/http_transport.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_contracts.py",
+        "destination": "scripts/qianchuan_script_acquisition_contracts.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_csv_parser.py",
+        "destination": "scripts/qianchuan_script_acquisition_csv_parser.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_fact_pack.py",
+        "destination": "scripts/qianchuan_script_acquisition_fact_pack.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_field_registry.py",
+        "destination": "scripts/qianchuan_script_acquisition_field_registry.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_identity.py",
+        "destination": "scripts/qianchuan_script_acquisition_identity.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_pipeline.py",
+        "destination": "scripts/qianchuan_script_acquisition_pipeline.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_receipt.py",
+        "destination": "scripts/qianchuan_script_acquisition_receipt.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_report_client.py",
+        "destination": "scripts/qianchuan_script_acquisition_report_client.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_rpa_client.py",
+        "destination": "scripts/qianchuan_script_acquisition_rpa_client.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_selection.py",
+        "destination": "scripts/qianchuan_script_acquisition_selection.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_verified_run.py",
+        "destination": "scripts/qianchuan_script_acquisition_verified_run.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/rpa_gateway.py",
+        "destination": "scripts/rpa_gateway.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/run.py",
+        "destination": "scripts/run.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/script_cli.py",
+        "destination": "scripts/script_cli.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/script_creation_contracts.py",
+        "destination": "scripts/script_creation_contracts.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/script_creation_reporting.py",
+        "destination": "scripts/script_creation_reporting.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/script_creation_selection.py",
+        "destination": "scripts/script_creation_selection.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/script_creation_session.py",
+        "destination": "scripts/script_creation_session.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/script_creation_validation.py",
+        "destination": "scripts/script_creation_validation.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/workbench_analysis.py",
+        "destination": "scripts/workbench_analysis.py"
+      },
+      {
+        "source": "skills/qianchuan-script-workbench/scripts/workbench_reporting.py",
+        "destination": "scripts/workbench_reporting.py"
+      }
+    ],
+    "entrypoint": "scripts/run.py"
+  },
+  "originalManifestSha256": "7d4002aea63d1a3f8f63d76804aaf92247a3eb3a3d7b467cdef36031e35b2817",
+  "files": [
+    {
+      "source": "skills/qianchuan-script-workbench/MAINTENANCE.md",
+      "destination": "MAINTENANCE.md",
+      "sha256": "1f5e5efbd8958ea55ccfad02844b52a57a10022cb1f895d493bf62fb408f9cf4",
+      "sizeBytes": 1479,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/SKILL.md",
+      "destination": "SKILL.md",
+      "sha256": "7c2d7ac854b745028a74cf00ec6b12d1950e480fa782f1f78752e5062fcf0c24",
+      "sizeBytes": 5742,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/agents/openai.yaml",
+      "destination": "agents/openai.yaml",
+      "sha256": "e5993c737323b2544f3eeba8ec3d82a4d9e5b52a7f8be36e14a57b35832acd06",
+      "sizeBytes": 294,
+      "role": "runtime"
+    },
+    {
+      "source": "config/asset-field-registry-v1.json",
+      "destination": "config/asset-field-registry-v1.json",
+      "sha256": "2c1e8321f960c6768dbf4e486b422b5d300b74ddb9c8ca13c2a36270e7b13665",
+      "sizeBytes": 1334,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/metadata.yaml",
+      "destination": "metadata.yaml",
+      "sha256": "8aef54d17568a1892f020423a2644661d6b1126021338d59e9bc06f3c3fd1868",
+      "sizeBytes": 3179,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/references/input-contract.md",
+      "destination": "references/input-contract.md",
+      "sha256": "9b6243d50b0f18d4327cf0d105d81ad3a6e7de4362a8817b4ee01b6a9aa50387",
+      "sizeBytes": 3329,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/references/output-contract.md",
+      "destination": "references/output-contract.md",
+      "sha256": "487917f4cc40782b455e0fe747c5ac65ea3111282d32f7f0f6cd78f6b5972a36",
+      "sizeBytes": 3350,
+      "role": "runtime"
+    },
+    {
+      "source": "requirements-batch3.txt",
+      "destination": "requirements.txt",
+      "sha256": "44ff0dc2f1e40311b8239e83146749ab9d9cee2a650e699f5464755d552ee20d",
+      "sizeBytes": 19,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/acquisition-results.schema.json",
+      "destination": "schemas/acquisition-results.schema.json",
+      "sha256": "fe4b67e0c732202afa66ff7d8339e323e64985d416476c52da91c15c0b63a714",
+      "sizeBytes": 4954,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/analysis-handoff.schema.json",
+      "destination": "schemas/analysis-handoff.schema.json",
+      "sha256": "6ff9134029ad517404ee23730ea75bd0995cdd61b8d9b0726fd4184def524150",
+      "sizeBytes": 1711,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/generated-scripts.schema.json",
+      "destination": "schemas/generated-scripts.schema.json",
+      "sha256": "7a4917ef7f5f540fa74b56193bbd8e70dee17177490cde384d22b65af65cfb13",
+      "sizeBytes": 7129,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/qianchuan-material-report-snapshot.schema.json",
+      "destination": "schemas/qianchuan-material-report-snapshot.schema.json",
+      "sha256": "69a4ec5d6bb27fa0c6be2d9a972a00ae20675df45d474fdde4fa5c1adb8100fa",
+      "sizeBytes": 656,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/qianchuan-material-selection-audit.schema.json",
+      "destination": "schemas/qianchuan-material-selection-audit.schema.json",
+      "sha256": "556144dbabc73db0a73dd9dc1e3de9db05044d0310cef70eb73201822ee4269a",
+      "sizeBytes": 1558,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/qianchuan-report-query-receipt.schema.json",
+      "destination": "schemas/qianchuan-report-query-receipt.schema.json",
+      "sha256": "65591663e5c891fb6020cb4fd1889ff7a9d1c7e92dc0dae5b492f69fce912e05",
+      "sizeBytes": 830,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/qianchuan-script-acquisition-input.schema.json",
+      "destination": "schemas/qianchuan-script-acquisition-input.schema.json",
+      "sha256": "ab59ad97bb59f0b1cdd2eb59ea45c710650f22deaa174e409c95de0c1142f0cd",
+      "sizeBytes": 1249,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/qianchuan-script-attempt-records.schema.json",
+      "destination": "schemas/qianchuan-script-attempt-records.schema.json",
+      "sha256": "235e2719d72a0fbf5c04f2b96f0a13729100b51c61d39e4781cf11f52067b599",
+      "sizeBytes": 122,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/qianchuan-script-material-fact.schema.json",
+      "destination": "schemas/qianchuan-script-material-fact.schema.json",
+      "sha256": "a4ddebcc0754f2317782ad7cc769bb4f2aca06b1c1abf408fcfc1945c7944a71",
+      "sizeBytes": 2494,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/qianchuan-script-source-pack.schema.json",
+      "destination": "schemas/qianchuan-script-source-pack.schema.json",
+      "sha256": "a0cf036f0af7733febefadd2868d9ac03124fef73f47b812dddc0ce557d2c66a",
+      "sizeBytes": 13955,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/qianchuan-selection-pending.schema.json",
+      "destination": "schemas/qianchuan-selection-pending.schema.json",
+      "sha256": "db05ed42bca589841fbe1cc46cc66fb010cf03fdc7b559ae4799cc77cb92524f",
+      "sizeBytes": 1108,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/rewritten-script.schema.json",
+      "destination": "schemas/rewritten-script.schema.json",
+      "sha256": "e59affd1f7fe22aed1bd9dd4c16b597e88241ac4b4d4fb1180bf721f6f82101a",
+      "sizeBytes": 5210,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/script-acquisition-receipt.schema.json",
+      "destination": "schemas/script-acquisition-receipt.schema.json",
+      "sha256": "a3ddd106940fc9512cd5ed33fe0fedb43faaac442421313c89a9d8024cab3e12",
+      "sizeBytes": 1232,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/script-analysis-input.schema.json",
+      "destination": "schemas/script-analysis-input.schema.json",
+      "sha256": "91bd5f370c22602130c6c7aff383c6826d11623afa3868b54b87b5b4f562d663",
+      "sizeBytes": 1273,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/script-analysis-model-input.schema.json",
+      "destination": "schemas/script-analysis-model-input.schema.json",
+      "sha256": "20e6ef36b155e7ce09a30c2d9c11f16a3707cce69d34a09f2ef905b6fa2ebe6f",
+      "sizeBytes": 935,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/script-analysis-plan.schema.json",
+      "destination": "schemas/script-analysis-plan.schema.json",
+      "sha256": "078e09c40c2c691dacfd0fbeaf5e0c13e16d683e956ada9643305fa292f48696",
+      "sizeBytes": 2477,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/script-analysis-receipt.schema.json",
+      "destination": "schemas/script-analysis-receipt.schema.json",
+      "sha256": "7a3511968d4aa8ffa9f26096207a848463f783a18231d6141929aa32c795f878",
+      "sizeBytes": 1347,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/script-analysis-result.schema.json",
+      "destination": "schemas/script-analysis-result.schema.json",
+      "sha256": "f8fc705bcb7dd9bc10e1cd1d284dd3a6a8d677d4cc94c4aed2cf16fa6ca13b0d",
+      "sizeBytes": 2129,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/script-generation-request.schema.json",
+      "destination": "schemas/script-generation-request.schema.json",
+      "sha256": "5e83f017767cf2c81acd72e3b92c6f2870009ceb6e64dcfe6039b6fd96db6fd3",
+      "sizeBytes": 1224,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/script-rewrite-request.schema.json",
+      "destination": "schemas/script-rewrite-request.schema.json",
+      "sha256": "8c560adface76a3db35edfb56a5b9d4def14f887544772a929e182de51e12655",
+      "sizeBytes": 848,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/script-run-status.schema.json",
+      "destination": "schemas/script-run-status.schema.json",
+      "sha256": "8b94795dc78af8c3ecb3cc3850fae0388df9d14fa2d26e822a6fc7106970199d",
+      "sizeBytes": 2304,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/summary-data.schema.json",
+      "destination": "schemas/summary-data.schema.json",
+      "sha256": "1a227ca58410ad47151b819ea285da1e12171e929d18ae2174e5aa8ad2ca48fc",
+      "sizeBytes": 2659,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/summary-report-receipt.schema.json",
+      "destination": "schemas/summary-report-receipt.schema.json",
+      "sha256": "c92190075c7eb55595f07e9dd00baf431ade52bd66bf64e707d211ae92afd375",
+      "sizeBytes": 865,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/workbench-analysis-receipt.schema.json",
+      "destination": "schemas/workbench-analysis-receipt.schema.json",
+      "sha256": "77b15b365059ebd55beaaa3aeacf834f47002ca2de7ccd25244840b49cb2ceff",
+      "sizeBytes": 1232,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/workbench-analysis-request.schema.json",
+      "destination": "schemas/workbench-analysis-request.schema.json",
+      "sha256": "cb8ca0d5cd01fee2afd66a139ce3ab696d4b455e660de2fe2396d9614e2e0622",
+      "sizeBytes": 555,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/schemas/workbench-operation-status.schema.json",
+      "destination": "schemas/workbench-operation-status.schema.json",
+      "sha256": "935679a045a3b7b805a8385bec56370c8734ecc0bc187687ad3f300efbeff91e",
+      "sizeBytes": 1297,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/errors.py",
+      "destination": "scripts/errors.py",
+      "sha256": "b317afbfff343d5a26729a887e80bd89de28a22883a168c0a33bd6ee619a0a87",
+      "sizeBytes": 316,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/http_transport.py",
+      "destination": "scripts/http_transport.py",
+      "sha256": "c2e921e9757a16909cd5a54e2e0e4fe9197fcf8b7c44ba58076fe853c07ab36d",
+      "sizeBytes": 3400,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_contracts.py",
+      "destination": "scripts/qianchuan_script_acquisition_contracts.py",
+      "sha256": "40f0762f5ec8edfeb7faabcfed671970ae39f6cb78e64e2e66dd7b1ad330b10b",
+      "sizeBytes": 5236,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_csv_parser.py",
+      "destination": "scripts/qianchuan_script_acquisition_csv_parser.py",
+      "sha256": "ac28b5ce54e7645a3e47e667bde28db62a3a3e883d98e2e1814a80c322f665c2",
+      "sizeBytes": 5026,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_fact_pack.py",
+      "destination": "scripts/qianchuan_script_acquisition_fact_pack.py",
+      "sha256": "6b49700b7380fde4988fa96a4abd42cb82cba096681c3a0d82efb22c20107c68",
+      "sizeBytes": 6586,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_field_registry.py",
+      "destination": "scripts/qianchuan_script_acquisition_field_registry.py",
+      "sha256": "ee42f8786821432efb8086f4961735e7ad707448e085f656bebc043a2a414fd3",
+      "sizeBytes": 10274,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_identity.py",
+      "destination": "scripts/qianchuan_script_acquisition_identity.py",
+      "sha256": "08a4efa253187f901f5ab38f13d2c573d3877c624ed8bc90067101d2215fa995",
+      "sizeBytes": 2592,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_pipeline.py",
+      "destination": "scripts/qianchuan_script_acquisition_pipeline.py",
+      "sha256": "aa519ee1219802a0f18bc94e09a185938d52b4ce168cb7a563c5a41331d6de81",
+      "sizeBytes": 41733,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_receipt.py",
+      "destination": "scripts/qianchuan_script_acquisition_receipt.py",
+      "sha256": "0ef3cc644d8d817f3b2600e5eb883b4004d5191558a699b0b8815b6993943f37",
+      "sizeBytes": 1143,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_report_client.py",
+      "destination": "scripts/qianchuan_script_acquisition_report_client.py",
+      "sha256": "ecafed0b10b3d8a9f3464dfccaa68e27f5881ace549d9d5077d12254961363df",
+      "sizeBytes": 23916,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_rpa_client.py",
+      "destination": "scripts/qianchuan_script_acquisition_rpa_client.py",
+      "sha256": "030f50674c86aeb3b450f66dc3b494ce9e39ef8cf5b21496cd653025b912ee32",
+      "sizeBytes": 1092,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_selection.py",
+      "destination": "scripts/qianchuan_script_acquisition_selection.py",
+      "sha256": "f76e040fcdd4d765bb5eb053bbe80f28c86d6408cd8977dd9152ca529ab5edd1",
+      "sizeBytes": 7169,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/qianchuan_script_acquisition_verified_run.py",
+      "destination": "scripts/qianchuan_script_acquisition_verified_run.py",
+      "sha256": "44e2840fc86fe8ea2b9cd62651c783a8f108aeffa0f1a8344c710ab345915b47",
+      "sizeBytes": 4266,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/rpa_gateway.py",
+      "destination": "scripts/rpa_gateway.py",
+      "sha256": "47d328129f3c17ca495147c4ff7570d257827ce047b3cff9e9871d950e528c30",
+      "sizeBytes": 12377,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/run.py",
+      "destination": "scripts/run.py",
+      "sha256": "38a10b459c8fc3305157f184c25a83c459e91343952ffc6adb426a7b997dfba3",
+      "sizeBytes": 780,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/script_cli.py",
+      "destination": "scripts/script_cli.py",
+      "sha256": "6c637c2a872f3cbacecd50f9f9449709636138e3cc795f5d7f215c3d4f39a69a",
+      "sizeBytes": 59626,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/script_creation_contracts.py",
+      "destination": "scripts/script_creation_contracts.py",
+      "sha256": "3dcf6afab65c49862216338f17eecd08fe8f67f5a16af0340b6c63ae7f933777",
+      "sizeBytes": 4835,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/script_creation_reporting.py",
+      "destination": "scripts/script_creation_reporting.py",
+      "sha256": "f24dbeb3e01cae19d05cd1da731047af80032b987aa6864928558c8cf06b6eae",
+      "sizeBytes": 7187,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/script_creation_selection.py",
+      "destination": "scripts/script_creation_selection.py",
+      "sha256": "e1c1c2853c7084c840a2577667d41c3d118ab0ffb281f71fbea533420d3afb0c",
+      "sizeBytes": 5144,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/script_creation_session.py",
+      "destination": "scripts/script_creation_session.py",
+      "sha256": "ca3a6d69394acbae36d192fb0b9220b1de2077cc59dc6e1b721cb95a0be182b5",
+      "sizeBytes": 18656,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/script_creation_validation.py",
+      "destination": "scripts/script_creation_validation.py",
+      "sha256": "c6d107e018f6132f9a6f3f2d29be764bcbff1dc290d77862780613a7ecb3f991",
+      "sizeBytes": 22200,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/workbench_analysis.py",
+      "destination": "scripts/workbench_analysis.py",
+      "sha256": "aa58dec24a326c6ae9ff9fd7c69fa40db2c517af1a7ea422e53cf5c70519c377",
+      "sizeBytes": 27038,
+      "role": "runtime"
+    },
+    {
+      "source": "skills/qianchuan-script-workbench/scripts/workbench_reporting.py",
+      "destination": "scripts/workbench_reporting.py",
+      "sha256": "eef7330e325f7e570a4b9ac7adf92de2e751e63bec8782c42f83af2506afe67d",
+      "sizeBytes": 21572,
+      "role": "runtime"
+    }
+  ],
+  "excludedCaches": [],
+  "historyPolicy": "Snapshot extraction; full original project history remains in the project-management repository. No per-skill history filtering was performed.",
+  "sourceSnapshotVerifiedAgainstCommit": true,
+  "initialPackageValidation": {
+    "sha256": "92f5e0b9e61384fa7b3f982ca8279324d4ea8b3ef2e599658d38f8d058de98be",
+    "originalIssuerSha256": "92f5e0b9e61384fa7b3f982ca8279324d4ea8b3ef2e599658d38f8d058de98be",
+    "byteIdenticalToOriginalIssuer": true,
+    "crc": "passed",
+    "exactManifest": "passed",
+    "sourceBytes": "passed",
+    "independentWorkingDirectory": "passed",
+    "archive": "/Users/shuzida/Desktop/skill统一管理/repositories/qianchuan-script-workbench/dist/qianchuan-script-workbench.zip"
+  }
+}

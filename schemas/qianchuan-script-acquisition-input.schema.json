@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "period"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "period": {
+      "type": "object", "additionalProperties": false,
+      "required": ["startDate", "endDate"],
+      "properties": {"startDate": {"type": "string", "format": "date"}, "endDate": {"type": "string", "format": "date"}}
+    },
+    "liveAcquire": {
+      "type": "object", "additionalProperties": false,
+      "required": ["apiShop", "rpaShop"],
+      "properties": {
+        "apiShop": {"type": "string", "minLength": 1}, "advertiserId": {"type": "string", "minLength": 1},
+        "rpaShop": {"type": "string", "minLength": 1}, "topN": {"type": "integer", "minimum": 1},
+        "timeoutSec": {"type": "integer", "minimum": 1}, "materialFilterSort": {"type": "object"}
+      }
+    },
+    "verifiedRun": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceRun"], "properties": {"sourceRun": {"type": "string", "minLength": 1}}
+    }
+  },
+  "oneOf": [{"required": ["liveAcquire"], "not": {"required": ["verifiedRun"]}}, {"required": ["verifiedRun"], "not": {"required": ["liveAcquire"]}}]
+}

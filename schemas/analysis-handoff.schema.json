@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "workflowState", "acquisitionState", "sourcePack", "summary", "report", "period", "selection", "materialIds", "availableScriptMaterialIds", "fieldAvailability", "availableFields", "gaps", "analysisAllowed"],
+  "properties": {
+    "schemaVersion": {"const": 1}, "runId": {"type": "string", "minLength": 1},
+    "workflowState": {"const": "awaitingAnalysisInput"}, "acquisitionState": {"enum": ["ready", "partialFailed"]},
+    "sourcePack": {"$ref": "#/$defs/fileRef"}, "summary": {"$ref": "#/$defs/fileRef"}, "report": {"$ref": "#/$defs/fileRef"},
+    "period": {"type": "object", "additionalProperties": true}, "selection": {"type": "object", "additionalProperties": true},
+    "materialIds": {"type": "array", "items": {"type": "string"}},
+    "availableScriptMaterialIds": {"type": "array", "items": {"type": "string"}},
+    "fieldAvailability": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": false, "required": ["available", "missing"], "properties": {"available": {"type": "integer", "minimum": 0}, "missing": {"type": "integer", "minimum": 0}}}},
+    "availableFields": {"type": "array", "items": {"enum": ["formula", "detail", "data", "text"]}},
+    "gaps": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "analysisAllowed": {"type": "boolean"}
+  },
+  "$defs": {"fileRef": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}}
+}

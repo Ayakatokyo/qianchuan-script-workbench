@@ -1,0 +1,560 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "period",
+    "selection",
+    "materials",
+    "scripts",
+    "deduplication",
+    "availability",
+    "sourceRefs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startDate",
+        "endDate"
+      ],
+      "properties": {
+        "startDate": {
+          "type": "string"
+        },
+        "endDate": {
+          "type": "string"
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rankingField",
+        "direction",
+        "filters"
+      ],
+      "properties": {
+        "runId": {
+          "type": "string"
+        },
+        "rankingField": {
+          "type": "string"
+        },
+        "rankingLabel": {
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            "asc",
+            "desc"
+          ]
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "topN": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reportRowCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "filteredOutCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matchingRowCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rankableRowCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "selectedMaterialIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excludedRows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rowNumber",
+              "reason",
+              "fieldId"
+            ],
+            "properties": {
+              "rowNumber": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "materialId": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "fieldId": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "reportSnapshotPath": {
+          "type": "string"
+        },
+        "reportSnapshotSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "selectionAuditPath": {
+          "type": "string"
+        }
+      }
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "materialId",
+          "rank",
+          "metrics",
+          "sourceRefs"
+        ],
+        "properties": {
+          "materialId": {
+            "type": "string"
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "metrics": {
+            "type": "object"
+          },
+          "sourceRefs": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "scripts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scriptId",
+          "materialId",
+          "rawText",
+          "rawTextSha256",
+          "normalizedTextSha256",
+          "parseStatus",
+          "completeness",
+          "sourceRefs"
+        ],
+        "properties": {
+          "scriptId": {
+            "type": "string"
+          },
+          "materialId": {
+            "type": "string"
+          },
+          "rawText": {
+            "type": "string"
+          },
+          "rawTextSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "normalizedTextSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "parseStatus": {
+            "enum": [
+              "parsed",
+              "missing",
+              "failed"
+            ]
+          },
+          "completeness": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "boolean"
+              },
+              "formulaLabels": {
+                "type": "boolean"
+              },
+              "detailLabels": {
+                "type": "boolean"
+              },
+              "structuredData": {
+                "type": "boolean"
+              },
+              "transcript": {
+                "type": "boolean"
+              }
+            }
+          },
+          "sourceRefs": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "formula": {},
+          "detail": {},
+          "data": {},
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fieldSourceRefs": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "formula": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "path",
+                        "sha256"
+                      ],
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sizeBytes": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "detail": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "path",
+                        "sha256"
+                      ],
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sizeBytes": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "path",
+                        "sha256"
+                      ],
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sizeBytes": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "path",
+                        "sha256"
+                      ],
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "sizeBytes": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "materialFile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "materialFileSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "deduplication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uniqueScriptCount",
+        "groups"
+      ],
+      "properties": {
+        "uniqueScriptCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requested",
+        "available",
+        "missing",
+        "failed"
+      ],
+      "properties": {
+        "requested": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "available": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "sizeBytes": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        ]
+      }
+    },
+    "contentAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "formulaLabels": {
+          "$ref": "#/$defs/contentCount"
+        },
+        "detailLabels": {
+          "$ref": "#/$defs/contentCount"
+        },
+        "structuredData": {
+          "$ref": "#/$defs/contentCount"
+        },
+        "transcript": {
+          "$ref": "#/$defs/contentCount"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "contentCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "missing"
+      ],
+      "properties": {
+        "available": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

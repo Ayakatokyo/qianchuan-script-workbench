@@ -1,0 +1,234 @@
+{
+  "package": "qianchuan-script-workbench",
+  "files": [
+    {
+      "source": "MAINTENANCE.md",
+      "destination": "MAINTENANCE.md"
+    },
+    {
+      "source": "SKILL.md",
+      "destination": "SKILL.md"
+    },
+    {
+      "source": "agents/openai.yaml",
+      "destination": "agents/openai.yaml"
+    },
+    {
+      "source": "config/asset-field-registry-v1.json",
+      "destination": "config/asset-field-registry-v1.json"
+    },
+    {
+      "source": "metadata.yaml",
+      "destination": "metadata.yaml"
+    },
+    {
+      "source": "references/input-contract.md",
+      "destination": "references/input-contract.md"
+    },
+    {
+      "source": "references/output-contract.md",
+      "destination": "references/output-contract.md"
+    },
+    {
+      "source": "requirements.txt",
+      "destination": "requirements.txt"
+    },
+    {
+      "source": "schemas/acquisition-results.schema.json",
+      "destination": "schemas/acquisition-results.schema.json"
+    },
+    {
+      "source": "schemas/analysis-handoff.schema.json",
+      "destination": "schemas/analysis-handoff.schema.json"
+    },
+    {
+      "source": "schemas/generated-scripts.schema.json",
+      "destination": "schemas/generated-scripts.schema.json"
+    },
+    {
+      "source": "schemas/qianchuan-material-report-snapshot.schema.json",
+      "destination": "schemas/qianchuan-material-report-snapshot.schema.json"
+    },
+    {
+      "source": "schemas/qianchuan-material-selection-audit.schema.json",
+      "destination": "schemas/qianchuan-material-selection-audit.schema.json"
+    },
+    {
+      "source": "schemas/qianchuan-report-query-receipt.schema.json",
+      "destination": "schemas/qianchuan-report-query-receipt.schema.json"
+    },
+    {
+      "source": "schemas/qianchuan-script-acquisition-input.schema.json",
+      "destination": "schemas/qianchuan-script-acquisition-input.schema.json"
+    },
+    {
+      "source": "schemas/qianchuan-script-attempt-records.schema.json",
+      "destination": "schemas/qianchuan-script-attempt-records.schema.json"
+    },
+    {
+      "source": "schemas/qianchuan-script-material-fact.schema.json",
+      "destination": "schemas/qianchuan-script-material-fact.schema.json"
+    },
+    {
+      "source": "schemas/qianchuan-script-source-pack.schema.json",
+      "destination": "schemas/qianchuan-script-source-pack.schema.json"
+    },
+    {
+      "source": "schemas/qianchuan-selection-pending.schema.json",
+      "destination": "schemas/qianchuan-selection-pending.schema.json"
+    },
+    {
+      "source": "schemas/rewritten-script.schema.json",
+      "destination": "schemas/rewritten-script.schema.json"
+    },
+    {
+      "source": "schemas/script-acquisition-receipt.schema.json",
+      "destination": "schemas/script-acquisition-receipt.schema.json"
+    },
+    {
+      "source": "schemas/script-analysis-input.schema.json",
+      "destination": "schemas/script-analysis-input.schema.json"
+    },
+    {
+      "source": "schemas/script-analysis-model-input.schema.json",
+      "destination": "schemas/script-analysis-model-input.schema.json"
+    },
+    {
+      "source": "schemas/script-analysis-plan.schema.json",
+      "destination": "schemas/script-analysis-plan.schema.json"
+    },
+    {
+      "source": "schemas/script-analysis-receipt.schema.json",
+      "destination": "schemas/script-analysis-receipt.schema.json"
+    },
+    {
+      "source": "schemas/script-analysis-result.schema.json",
+      "destination": "schemas/script-analysis-result.schema.json"
+    },
+    {
+      "source": "schemas/script-generation-request.schema.json",
+      "destination": "schemas/script-generation-request.schema.json"
+    },
+    {
+      "source": "schemas/script-rewrite-request.schema.json",
+      "destination": "schemas/script-rewrite-request.schema.json"
+    },
+    {
+      "source": "schemas/script-run-status.schema.json",
+      "destination": "schemas/script-run-status.schema.json"
+    },
+    {
+      "source": "schemas/summary-data.schema.json",
+      "destination": "schemas/summary-data.schema.json"
+    },
+    {
+      "source": "schemas/summary-report-receipt.schema.json",
+      "destination": "schemas/summary-report-receipt.schema.json"
+    },
+    {
+      "source": "schemas/workbench-analysis-receipt.schema.json",
+      "destination": "schemas/workbench-analysis-receipt.schema.json"
+    },
+    {
+      "source": "schemas/workbench-analysis-request.schema.json",
+      "destination": "schemas/workbench-analysis-request.schema.json"
+    },
+    {
+      "source": "schemas/workbench-operation-status.schema.json",
+      "destination": "schemas/workbench-operation-status.schema.json"
+    },
+    {
+      "source": "scripts/errors.py",
+      "destination": "scripts/errors.py"
+    },
+    {
+      "source": "scripts/http_transport.py",
+      "destination": "scripts/http_transport.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_contracts.py",
+      "destination": "scripts/qianchuan_script_acquisition_contracts.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_csv_parser.py",
+      "destination": "scripts/qianchuan_script_acquisition_csv_parser.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_fact_pack.py",
+      "destination": "scripts/qianchuan_script_acquisition_fact_pack.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_field_registry.py",
+      "destination": "scripts/qianchuan_script_acquisition_field_registry.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_identity.py",
+      "destination": "scripts/qianchuan_script_acquisition_identity.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_pipeline.py",
+      "destination": "scripts/qianchuan_script_acquisition_pipeline.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_receipt.py",
+      "destination": "scripts/qianchuan_script_acquisition_receipt.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_report_client.py",
+      "destination": "scripts/qianchuan_script_acquisition_report_client.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_rpa_client.py",
+      "destination": "scripts/qianchuan_script_acquisition_rpa_client.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_selection.py",
+      "destination": "scripts/qianchuan_script_acquisition_selection.py"
+    },
+    {
+      "source": "scripts/qianchuan_script_acquisition_verified_run.py",
+      "destination": "scripts/qianchuan_script_acquisition_verified_run.py"
+    },
+    {
+      "source": "scripts/rpa_gateway.py",
+      "destination": "scripts/rpa_gateway.py"
+    },
+    {
+      "source": "scripts/run.py",
+      "destination": "scripts/run.py"
+    },
+    {
+      "source": "scripts/script_cli.py",
+      "destination": "scripts/script_cli.py"
+    },
+    {
+      "source": "scripts/script_creation_contracts.py",
+      "destination": "scripts/script_creation_contracts.py"
+    },
+    {
+      "source": "scripts/script_creation_reporting.py",
+      "destination": "scripts/script_creation_reporting.py"
+    },
+    {
+      "source": "scripts/script_creation_selection.py",
+      "destination": "scripts/script_creation_selection.py"
+    },
+    {
+      "source": "scripts/script_creation_session.py",
+      "destination": "scripts/script_creation_session.py"
+    },
+    {
+      "source": "scripts/script_creation_validation.py",
+      "destination": "scripts/script_creation_validation.py"
+    },
+    {
+      "source": "scripts/workbench_analysis.py",
+      "destination": "scripts/workbench_analysis.py"
+    },
+    {
+      "source": "scripts/workbench_reporting.py",
+      "destination": "scripts/workbench_reporting.py"
+    }
+  ],
+  "entrypoint": "scripts/run.py"
+}

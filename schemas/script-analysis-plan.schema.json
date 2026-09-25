@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "analysisId", "operation", "requestText", "materialSelection", "scriptFields", "metricFields", "comparison", "outputGoal"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "analysisId": {"type": "string", "minLength": 1},
+    "operation": {"const": "analysis"},
+    "requestText": {"type": "string", "minLength": 1},
+    "materialSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {"enum": ["all", "ranks", "materialIds"]},
+        "minRank": {"type": "integer", "minimum": 1},
+        "maxRank": {"type": "integer", "minimum": 1},
+        "materialIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "scriptFields": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["formula", "detail", "data", "text"]}},
+    "metricFields": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "groupBy"],
+      "properties": {
+        "mode": {"enum": ["none", "sideBySide", "groupByScriptText", "groupByMetricBand"]},
+        "groupBy": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "outputGoal": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"materialSelection": {"properties": {"mode": {"const": "all"}}, "required": ["mode"]}}, "required": ["materialSelection"]},
+      "then": {"properties": {"materialSelection": {"not": {"anyOf": [{"required": ["minRank"]}, {"required": ["maxRank"]}, {"required": ["materialIds"]}]}}}}
+    },
+    {
+      "if": {"properties": {"materialSelection": {"properties": {"mode": {"const": "ranks"}}, "required": ["mode"]}}, "required": ["materialSelection"]},
+      "then": {"properties": {"materialSelection": {"required": ["minRank", "maxRank"]}}}
+    },
+    {
+      "if": {"properties": {"materialSelection": {"properties": {"mode": {"const": "materialIds"}}, "required": ["mode"]}}, "required": ["materialSelection"]},
+      "then": {"properties": {"materialSelection": {"required": ["materialIds"]}}}
+    }
+  ]
+}

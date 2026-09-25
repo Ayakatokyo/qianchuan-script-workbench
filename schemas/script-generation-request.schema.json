@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "analysisId", "customerFacts", "businessMethod", "target"],
+  "properties": {
+    "providedReferences": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "kind", "source"], "properties": {"id": {"type": "string", "minLength": 1}, "kind": {"enum": ["own", "competitor", "user"]}, "source": {"type": "string", "minLength": 1}, "text": {"type": "string"}, "url": {"type": "string", "pattern": "^https?://"}}, "anyOf": [{"required": ["text"], "properties": {"text": {"minLength": 1}}}, {"required": ["url"]}]}},
+    "schemaVersion": {"const": 1}, "runId": {"type": "string", "minLength": 1}, "analysisId": {"type": "string", "minLength": 1}, "sourcePack": {"type": "string", "minLength": 1}, "customerFacts": {"type": "object"}, "businessMethod": {"type": "string", "minLength": 1}, "target": {"type": "object"}
+  },
+  "allOf": [{"if": {"properties": {"target": {"properties": {"brand": {"const": "一家之言"}}, "required": ["brand"]}}}, "else": {"required": ["sourcePack"], "not": {"required": ["providedReferences"]}}}]
+}

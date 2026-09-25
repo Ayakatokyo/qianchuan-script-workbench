@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "analysisId", "status", "strength", "inputHashes", "originalText", "rewrittenText", "changes", "checks", "referenceRefs", "review"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "analysisId": {"type": "string", "minLength": 1},
+    "status": {"enum": ["prepared", "awaitingModel", "draftOnly", "completed", "blocked", "failed"]},
+    "strength": {"enum": ["light", "medium", "strong"]},
+    "inputHashes": {"type": "object", "additionalProperties": false, "required": ["originalTextSha256", "customerFactsSha256", "methodSha256", "sourcePackSha256"], "properties": {"originalTextSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "customerFactsSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "methodSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "sourcePackSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+    "originalText": {"type": "string", "minLength": 1},
+    "rewrittenText": {"type": "string", "minLength": 1},
+    "changes": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["type", "content", "reason"], "properties": {"type": {"type": "string"}, "content": {"type": "string"}, "reason": {"type": "string"}, "referenceRefs": {"type": "array", "items": {"type": "string"}}}}},
+    "checks": {"type": "object", "additionalProperties": false, "required": ["immutableItemsPreserved", "deleteItemsRemoved", "customerFactsComplete", "constraintsPassed"], "properties": {"immutableItemsPreserved": {"type": "boolean"}, "deleteItemsRemoved": {"type": "boolean"}, "customerFactsComplete": {"type": "boolean"}, "constraintsPassed": {"type": "boolean"}}},
+    "referenceRefs": {"type": "array", "items": {"type": "string"}},
+    "review": {"type": "object", "additionalProperties": false, "required": ["issues", "humanReviewRequired"], "properties": {"issues": {"type": "array", "items": {"type": "string"}}, "humanReviewRequired": {"type": "boolean"}}},
+    "referenceAnalyses": {"type": "array", "items": {"$ref": "#/$defs/referenceAnalysis"}},
+    "referenceAnalysisRefs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/referenceAnalysisCitation"}}
+  },
+  "$defs": {
+    "comparison": {"type": "object", "additionalProperties": false, "required": ["alignment", "platformBasis", "transcriptBasis", "modelInference"], "properties": {"alignment": {"enum": ["aligned", "partiallyAligned", "divergent", "unclear", "textOnly"]}, "platformBasis": {"type": "string", "minLength": 1}, "transcriptBasis": {"type": "string", "minLength": 1}, "modelInference": {"type": "string", "minLength": 1}}},
+    "materialReferenceAnalysis": {"type": "object", "additionalProperties": false, "required": ["materialId", "evidenceMode", "platformObservations", "comparison", "borrowableMethod", "fieldSources"], "properties": {"materialId": {"type": "string", "minLength": 1}, "evidenceMode": {"enum": ["structuredAndText", "textOnly"]}, "platformObservations": {"type": "object", "additionalProperties": false, "required": ["formula", "detail", "data", "transcript"], "properties": {"formula": {"type": ["string", "null"]}, "detail": {"type": ["string", "null"]}, "data": {"type": ["string", "null"]}, "transcript": {"type": "string", "minLength": 1}}}, "comparison": {"type": "object", "additionalProperties": false, "required": ["opening", "sellingPointProgression", "evidence", "callToAction"], "properties": {"opening": {"$ref": "#/$defs/comparison"}, "sellingPointProgression": {"$ref": "#/$defs/comparison"}, "evidence": {"$ref": "#/$defs/comparison"}, "callToAction": {"$ref": "#/$defs/comparison"}}}, "borrowableMethod": {"type": "string", "minLength": 1}, "fieldSources": {"type": "object", "additionalProperties": false, "required": ["formula", "detail", "data", "text"], "properties": {"formula": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}, "detail": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}, "data": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}, "text": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}}}}},
+    "referenceAnalysis": {"type": "object", "additionalProperties": false, "required": ["referenceRef", "materialAnalyses"], "properties": {"referenceRef": {"type": "string", "minLength": 1}, "materialAnalyses": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/materialReferenceAnalysis"}}}},
+    "referenceAnalysisCitation": {"type": "object", "additionalProperties": false, "required": ["referenceRef", "materialId"], "properties": {"referenceRef": {"type": "string", "minLength": 1}, "materialId": {"type": "string", "minLength": 1}}}
+  },
+  "allOf": [{"if": {"properties": {"status": {"const": "completed"}}}, "then": {"properties": {"checks": {"properties": {"immutableItemsPreserved": {"const": true}, "deleteItemsRemoved": {"const": true}, "customerFactsComplete": {"const": true}, "constraintsPassed": {"const": true}}}}}}]
+}

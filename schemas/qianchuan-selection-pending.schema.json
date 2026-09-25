@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "status", "errorCode", "message", "requestedSelection", "availableSortFields", "reportSnapshot", "reportSnapshotSha256", "reportRowCount", "excludedRows"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "status": {"const": "awaitingSelection"},
+    "errorCode": {"enum": ["selection_requires_confirmation", "selection_metric_unavailable"]},
+    "message": {"type": "string"},
+    "requestedSelection": {"type": "object"},
+    "availableSortFields": {"type": "array", "items": {"type": "object", "required": ["fieldId", "label"], "properties": {"fieldId": {"type": "string"}, "label": {"type": "string"}}}},
+    "reportSnapshot": {"const": "source-data/material-report-snapshot.json"},
+    "reportSnapshotSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "reportRowCount": {"type": "integer", "minimum": 0},
+    "excludedRows": {"type": "array", "items": {"type": "object"}}
+  }
+}

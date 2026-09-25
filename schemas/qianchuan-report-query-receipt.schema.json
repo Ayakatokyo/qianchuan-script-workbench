@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "status", "snapshotPath", "snapshotSha256", "rowsSha256", "recordCount", "queryFingerprint", "scopeFingerprint"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "status": {"const": "completed"},
+    "snapshotPath": {"const": "source-data/material-report-snapshot.json"},
+    "snapshotSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "rowsSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "recordCount": {"type": "integer", "minimum": 0},
+    "queryFingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "scopeFingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

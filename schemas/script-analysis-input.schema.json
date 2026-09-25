@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "analysisId", "operation", "sourcePackSha256", "selectedMaterialIds", "scriptFields", "metricFields", "comparison", "materials", "gaps", "nonCausalBoundary"],
+  "properties": {
+    "schemaVersion": {"const": 1}, "runId": {"type": "string"}, "analysisId": {"type": "string"}, "operation": {"const": "analysis"},
+    "sourcePackSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "selectedMaterialIds": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "scriptFields": {"type": "array", "items": {"enum": ["formula", "detail", "data", "text"]}}, "metricFields": {"type": "array", "items": {"type": "string"}},
+    "comparison": {"type": "object", "additionalProperties": true}, "materials": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": true}},
+    "gaps": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["materialId", "field", "reason"], "properties": {"materialId": {"type": "string"}, "field": {"type": "string"}, "reason": {"type": "string"}}}},
+    "nonCausalBoundary": {"type": "string", "minLength": 1}
+  }
+}

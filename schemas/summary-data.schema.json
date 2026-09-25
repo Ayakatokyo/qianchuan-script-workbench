@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "acquisitionState", "period", "selection", "counts", "fieldAvailability", "materials", "duplicateTextGroups", "gaps", "sourcePack"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "acquisitionState": {"enum": ["ready", "partialFailed"]},
+    "period": {"type": "object", "additionalProperties": true},
+    "selection": {"type": "object", "additionalProperties": true},
+    "counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reportRows", "selectedMaterials", "requestedScripts", "availableScripts", "missingScripts", "failedScripts", "submittedWithoutScript", "submissionUnknown", "unsubmitted", "failedMaterials"],
+      "properties": {
+        "reportRows": {"type": ["integer", "null"], "minimum": 0},
+        "selectedMaterials": {"type": "integer", "minimum": 0},
+        "requestedScripts": {"type": "integer", "minimum": 0},
+        "availableScripts": {"type": "integer", "minimum": 0},
+        "missingScripts": {"type": "integer", "minimum": 0},
+        "failedScripts": {"type": "integer", "minimum": 0},
+        "submittedWithoutScript": {"type": "integer", "minimum": 0},
+        "submissionUnknown": {"type": "integer", "minimum": 0},
+        "unsubmitted": {"type": "integer", "minimum": 0},
+        "failedMaterials": {"type": "integer", "minimum": 0}
+      }
+    },
+    "fieldAvailability": {
+      "type": "object", "additionalProperties": false,
+      "required": ["formula", "detail", "data", "text"],
+      "properties": {"formula": {"$ref": "#/$defs/fieldCount"}, "detail": {"$ref": "#/$defs/fieldCount"}, "data": {"$ref": "#/$defs/fieldCount"}, "text": {"$ref": "#/$defs/fieldCount"}}
+    },
+    "materials": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "duplicateTextGroups": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "gaps": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "sourcePack": {"$ref": "#/$defs/fileRef"}
+  },
+  "$defs": {
+    "fieldCount": {"type": "object", "additionalProperties": false, "required": ["available", "missing"], "properties": {"available": {"type": "integer", "minimum": 0}, "missing": {"type": "integer", "minimum": 0}}},
+    "fileRef": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}
+  }
+}

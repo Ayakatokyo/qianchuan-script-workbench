@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "analysisId", "operation", "state", "inputHashes"],
+  "properties": {
+    "schemaVersion": {"const": 1}, "runId": {"type": "string"}, "analysisId": {"type": "string"}, "operation": {"enum": ["analysis", "generation", "rewrite"]},
+    "state": {"enum": ["prepared", "awaitingModel", "draftOnly", "completed", "blocked", "failed"]},
+    "inputHashes": {"type": "object", "additionalProperties": false, "required": ["sourcePackSha256", "planSha256", "modelInputSha256", "factsSliceSha256", "handoffSha256"], "properties": {"sourcePackSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "planSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "modelInputSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "factsSliceSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "handoffSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}, "additionalProperties": true},
+    "resultSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "reportSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "sourceHandoffSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "errorCode": {"type": ["string", "null"]}
+  }
+}

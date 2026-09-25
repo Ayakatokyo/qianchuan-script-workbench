@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "analysisId", "operation", "requestText", "planPath", "allowPartial"],
+  "properties": {
+    "schemaVersion": {"const": 1}, "runId": {"type": "string", "minLength": 1}, "analysisId": {"type": "string", "minLength": 1},
+    "operation": {"const": "analysis"}, "requestText": {"type": "string", "minLength": 1}, "planPath": {"type": "string", "minLength": 1}, "allowPartial": {"type": "boolean"}
+  }
+}

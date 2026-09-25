@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "reportRowCount", "filteredOutCount", "matchingRowCount", "rankableRowCount", "selectedCount", "topN", "ranking", "filters", "selectedMaterialIds", "excludedRows", "systemicError", "reportSnapshot", "reportSnapshotSha256"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "status": {"enum": ["selected", "awaitingSelection"]},
+    "reportRowCount": {"type": "integer", "minimum": 0},
+    "filteredOutCount": {"type": "integer", "minimum": 0},
+    "matchingRowCount": {"type": "integer", "minimum": 0},
+    "rankableRowCount": {"type": "integer", "minimum": 0},
+    "selectedCount": {"type": "integer", "minimum": 0},
+    "topN": {"type": "integer", "minimum": 1},
+    "ranking": {
+      "type": "object",
+      "required": ["fieldId", "label", "direction", "tieBreaker"],
+      "properties": {
+        "fieldId": {"type": "string"},
+        "label": {"type": "string"},
+        "direction": {"enum": ["asc", "desc"]},
+        "tieBreaker": {"type": "object"}
+      }
+    },
+    "filters": {"type": "array", "items": {"type": "object"}},
+    "selectedMaterialIds": {"type": "array", "items": {"type": "string"}},
+    "excludedRows": {"type": "array", "items": {"type": "object"}},
+    "systemicError": {"type": ["string", "null"]},
+    "reportSnapshot": {"const": "source-data/material-report-snapshot.json"},
+    "reportSnapshotSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

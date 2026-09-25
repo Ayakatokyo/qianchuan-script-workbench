@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "registryVersion": "2026-09-23-qianchuan-script-v2",
+  "fields": [
+    {"id": "material_id", "label": "素材ID", "kind": "dimension", "sourceKey": "materialId", "operators": ["eq", "in"], "sortable": false},
+    {"id": "material_name", "label": "素材名称", "kind": "dimension", "sourceKey": "materialName", "operators": ["eq", "in", "contains", "regex"], "sortable": false},
+    {"id": "total_ecpm_for_roi2", "label": "千次曝光成本", "kind": "metric", "sourceKey": "total_ecpm_for_roi2", "operators": ["eq", "gt", "gte", "lt", "lte", "between"], "sortable": true},
+    {"id": "stat_cost_for_overall_roi2", "label": "综合成本", "kind": "metric", "sourceKey": "stat_cost_for_overall_roi2", "operators": ["eq", "gt", "gte", "lt", "lte", "between"], "sortable": true},
+    {"id": "stat_cost_for_roi2", "label": "整体消耗", "kind": "metric", "sourceKey": "stat_cost_for_roi2", "operators": ["eq", "gt", "gte", "lt", "lte", "between"], "sortable": true, "labelEvidence": {"source": "qianchuan_material_export_20260830_20260904", "verification": "cross_record_value_alignment"}},
+    {"id": "video_play_count_for_roi2_v2", "label": "视频播放数", "kind": "metric", "sourceKey": "video_play_count_for_roi2_v2", "operators": ["eq", "gt", "gte", "lt", "lte", "between"], "sortable": true}
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "state"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "runId": {
+      "type": "string"
+    },
+    "analysisId": {
+      "type": "string"
+    },
+    "operation": {"enum": ["generation", "rewrite"]},
+    "sourceHandoffSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "allowPartial": {"type": "boolean"},
+    "state": {
+      "enum": [
+        "awaitingInput",
+        "awaitingSelection",
+        "querying",
+        "rpaProcessing",
+        "sourcePackBuilding",
+        "sourcePackVerifying",
+        "ready",
+        "partialFailed",
+        "failed",
+        "prepared",
+        "awaitingModel",
+        "draftOnly",
+        "completed",
+        "blocked"
+      ]
+    },
+    "errorCode": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reportSnapshot": {"type": "string"},
+    "reportSnapshotSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "recordCount": {"type": "integer", "minimum": 0},
+    "availableSortFields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fieldId", "label"],
+        "properties": {"fieldId": {"type": "string"}, "label": {"type": "string"}}
+      }
+    },
+    "missing": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requested",
+        "available",
+        "missing",
+        "failed"
+      ],
+      "properties": {
+        "requested": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "available": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "currentMaterialId": {
+      "type": "string"
+    },
+    "maxConcurrency": {
+      "const": 3
+    },
+    "inFlight": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "queued": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}
