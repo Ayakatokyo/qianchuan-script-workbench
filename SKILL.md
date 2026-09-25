@@ -25,11 +25,21 @@ python "$SKILL_ROOT/scripts/run.py" describe-acquire
 python "$SKILL_ROOT/scripts/run.py" preview-acquire --input "$INPUT_JSON"
 python "$SKILL_ROOT/scripts/run.py" acquire --input "$INPUT_JSON" --output-root "$DATA_ROOT"
 python "$SKILL_ROOT/scripts/run.py" continue-acquire --input "$CORRECTED_INPUT_JSON" --run-dir "$RUN_DIR"
-python "$SKILL_ROOT/scripts/run.py" verify --path "$RUN_DIR"
+# 已完成取数自动校验并出报告；以下用于离线恢复或历史目录
 python "$SKILL_ROOT/scripts/run.py" render-summary --run-dir "$RUN_DIR"
+# 仅失败诊断或专项审计时单独核验
+python "$SKILL_ROOT/scripts/run.py" verify --path "$RUN_DIR"
 ```
 
-只有 `verify` 返回通过且运行状态为 `ready` 或 `partialFailed` 时才生成 `overview/summary-data.json`、`overview/report.md`、`overview/receipt.json` 和根目录 `analysis-handoff.json`。报告保留周期、筛选排序口径、素材排名和原始指标字段、脚本/公式字段可用性、重复正文、来源与失败缺口。单位仅在字段注册表提供时显示，缺失单位标为“源数据未提供”。报告成功后明确暂停，请用户描述分析目标、素材范围或选择生成/改写；不得因用户说“参考脚本”就自动开始创作。
+`acquire` / `continue-acquire` 到达 `ready` 或 `partialFailed` 后自动执行一次离线校验并生成 `overview/index.html`、`overview/summary-data.json`、兼容 `overview/report.md`、`overview/receipt.json` 和根目录 `analysis-handoff.json`。返回的 `reportPath` 是主要阅读入口，`workflowState=awaitingAnalysisInput`；采集状态保持原值。报告失败保留采集事实并返回明确错误，修复后只需 `render-summary` 离线重试，不重新取数。暂停或待选材不生成成功报告。报告保留周期、筛选排序口径、素材名称/排名和原始指标字段、完整可信脚本文本及 formula/detail/data、重复正文、来源与失败缺口；支持按素材ID/名称/正文搜索和状态筛选。HTML 内嵌样式与交互，无远程资源依赖；关闭 JavaScript 仍能查看内容。单位仅在字段注册表提供时显示，缺失单位标为“源数据未提供”。报告成功后明确暂停，请用户描述分析目标、素材范围或选择生成/改写；不得因用户说“参考脚本”就自动开始创作。
+
+报告沿用千川、云图元技能第一阶段的蓝白工作台结构：素材筛选条件、素材榜单、脚本内容公式、单素材脚本、脚本片段库五个页签。榜单支持指标排序与每页十条分页；一级公式柱状图可下钻二级环图，环图与图例联动。公式覆盖按素材 ID 去重，一级覆盖率以有可读一级公式的素材为分母；仅使用平台显式标签，不把缺失结构或数值 ID 猜成标签。
+
+单素材页展示平台提供的一级/二级公式顺序、箭头和对应颜色，保留重复步骤；公式节点与正文的精确引用双向定位，支持复制公式及完整文案。片段库按一级/二级标签和关键词筛选，每页十二条，支持复制原句及跳转完整脚本；仅纳入所属已核验正文中精确命中的 detail 原句，没有公式映射时保留未分类，不补编一级标签。详细统计与展示口径见[输出契约](references/output-contract.md)。
+
+HTML 移除“完整性与缺口”页，以及顶部部分失败、等待第二阶段和“第一阶段仅平台事实”告示。素材级身份状态及来源仍可查阅；该展示调整不改变后台状态、首批 CSV 门禁、身份校验和阶段二准入。
+
+报告以 SHA-256 绑定收据和新交接。已有 Markdown 目录通过校验后只追加 HTML 及收据字段，保留原 Markdown、结构数据与既有交接字节，不破坏旧分析引用；新数据完整字段见本轮生成的 HTML。
 
 `partialFailed` 报告仍保持部分失败状态。若用户决定继续，必须对该次操作显式使用 `--allow-partial`，且分析只能引用已验证的部分事实。没有可用平台脚本文本的运行不可进入第二阶段。
 
@@ -43,9 +53,9 @@ python "$SKILL_ROOT/scripts/run.py" render-summary --run-dir "$RUN_DIR"
 
 ### 身份错配与隔离恢复
 
-返回载荷的 `materialId` 可能沿用请求值，必须继续以独立返回名称、创建时间等字段核对，不能因“有脚本”或 ID 相同而采信。发现错配后停止滚动补位，收齐在途任务后将本运行后续请求与恢复重试降为串行。`liveAcquire.identityRetryLimit` 表示额外重试次数，默认 2、范围 0–3；每次只重试已确认终态的身份错配，首批 CSV 暂停、未知任务及硬停止优先，不绕过门禁。
+返回载荷的 `materialId` 可能沿用请求值，必须继续以独立返回名称、创建时间等字段核对，不能因“有脚本”或 ID 相同而采信。页面 `materialIdTag` 明确为数字或“ID：数字”时也独立比对；同名同时间但页面 ID 冲突仍拒收。新审计用 `identityPolicy=metadata_and_returned_id_v2` 标记，旧审计按原策略复验，未知策略拒绝。发现错配后停止滚动补位，收齐在途任务后将本运行后续请求与恢复重试降为串行。`liveAcquire.identityRetryLimit` 表示额外重试次数，默认 2、范围 0–3；每次只重试已确认终态的身份错配，首批 CSV 暂停、未知任务及硬停止优先，不绕过门禁。
 
-每次尝试保存原载荷、身份对照及脚本内容/返回身份指纹；恢复成功仅使用通过核对的那次脚本字段。最终仍错配时保持 `partialFailed` 与失败事实，报告标记“已返回脚本内容，但素材身份不一致，未采信”（旧记录未保存正文存在性时不推断），并与“平台未返回可用正文”分开。隔离恢复用于降低疑似并发串扰，不能保证修复连接器内部定位或回填问题。旧终态目录不追加在线重试。
+每次尝试保存原载荷、身份对照及脚本内容/返回身份指纹；恢复成功仅使用通过核对的那次脚本字段。最终仍错配时保持 `partialFailed` 与失败事实，报告标记“已返回脚本内容，但素材身份不一致，未采信”，并与“平台未返回可用正文”分开。旧记录可从哈希已校验的原始 CSV 只读重算内容存在性与指纹，缺少有效 CSV 时保持未知；不回填或改写旧审计和事实。隔离恢复用于降低疑似并发串扰，不能保证修复连接器内部定位或回填问题。旧终态目录不追加在线重试。
 
 ## 第二阶段：用户自定义脚本分析
 

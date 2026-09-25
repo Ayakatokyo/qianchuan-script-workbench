@@ -1,4 +1,7 @@
 import json
+import hashlib
+import csv
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -55,6 +58,46 @@ class IdentitySummaryTests(unittest.TestCase):
             self.assertIsNone(summary["materials"][1]["script"]["returnedContentPresent"])
             self.assertIn("返回内容身份不一致，未采信", markdown)
             self.assertNotIn("已返回脚本内容，但", markdown)
+
+    def test_legacy_presence_can_be_replayed_from_hash_bound_csv_without_changing_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = self.make_failed(Path(directory), "material_identity_mismatch")
+            source = run / "source-data/returned.csv"
+            stream = io.StringIO()
+            writer = csv.writer(stream, delimiter="\x01")
+            writer.writerow(["recordType", "materialId", "materialName", "materialIdTag", "scriptInfo"])
+            writer.writerow(["script_analysis", "m2", "素材一", "ID：111",
+                             json.dumps({"text": "拒收正文不能进入报告"}, ensure_ascii=False)])
+            source.write_text(stream.getvalue(), encoding="utf-8")
+            results_path = run / "acquisition-results.json"
+            results = json.loads(results_path.read_text())
+            attempt = results["materials"][1]["attempts"][0]
+            attempt["payloadFiles"] = [{"kind": "csv", "path": "source-data/returned.csv",
+                                        "sha256": hashlib.sha256(source.read_bytes()).hexdigest()}]
+            write_json(results_path, results)
+            before = {p: p.read_bytes() for p in run.rglob('*') if p.is_file()}
+            summary, markdown, _ = build_summary(run)
+            script = summary["materials"][1]["script"]
+            self.assertTrue(script["returnedContentPresent"])
+            self.assertEqual(script["identityEvidence"][0]["contentEvidenceSource"], "verifiedCsvReplay")
+            self.assertEqual(script["identityEvidence"][0]["observed"]["materialIdTag"], ["ID：111"])
+            self.assertNotIn("拒收正文不能进入报告", json.dumps(summary, ensure_ascii=False))
+            self.assertIn("已返回脚本内容，但素材身份不一致", markdown)
+            self.assertEqual(before, {p:p.read_bytes() for p in before})
+            # Parseable CSV with a damaged script cell is still unknown, not empty.
+            stream = io.StringIO()
+            writer = csv.writer(stream, delimiter="\x01")
+            writer.writerow(["recordType", "materialId", "scriptInfo"])
+            writer.writerow(["script_analysis", "m2", "{bad-json"])
+            source.write_text(stream.getvalue(), encoding="utf-8")
+            attempt["payloadFiles"][0]["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
+            write_json(results_path, results)
+            unknown, _, _ = build_summary(run)
+            self.assertIsNone(unknown["materials"][1]["script"]["returnedContentPresent"])
+            self.assertIsNone(unknown["materials"][1]["script"]["identityEvidence"][0]["scriptContentSha256"])
+            source.write_bytes(source.read_bytes() + b'changed')
+            with self.assertRaisesRegex(WorkbenchError, "hash"):
+                build_summary(run)
 
     def test_matched_empty_script_and_remote_failure_keep_distinct_statuses(self):
         with tempfile.TemporaryDirectory() as directory:

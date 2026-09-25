@@ -10,7 +10,11 @@ import tempfile
 from typing import Any, Mapping
 
 from qianchuan_script_acquisition_receipt import atomic_json
+from qianchuan_script_acquisition_identity import ALIASES, _get, content_evidence
+from qianchuan_script_acquisition_csv_parser import parse_diagnosis_csv, RpaCsvError
+from qianchuan_script_acquisition_field_registry import _value_at
 from script_creation_contracts import validate_payload
+from workbench_report_html import render_html
 
 
 class WorkbenchError(ValueError):
@@ -69,6 +73,15 @@ def _result_map(run_dir: Path) -> dict[str, dict[str, Any]]:
     return {str(item.get("materialId")): dict(item) for item in payload.get("materials", []) if isinstance(item, Mapping)}
 
 
+def _material_names(run_dir: Path) -> dict[str, str | None]:
+    path = run_dir / "source-data" / "material-report-snapshot.json"
+    if not path.is_file():
+        return {}
+    identity_entry = {"id": "material_id", "label": "素材ID", "sourceKey": "materialId"}
+    return {str(_value_at(row, identity_entry) or "").strip(): _get(row, ALIASES["materialName"])
+            for row in _read_json(path).get("rows", []) if isinstance(row, Mapping)}
+
+
 def _field_registry() -> dict[str, dict[str, Any]]:
     candidates = [ancestor / "config" / "asset-field-registry-v1.json" for ancestor in Path(__file__).resolve().parents]
     for path in candidates:
@@ -113,6 +126,36 @@ def _selection_summary(pack: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _legacy_content_evidence(run_dir: Path, attempt: Mapping[str, Any], audit: Mapping[str, Any]) -> tuple[dict, list[str]]:
+    """Project old CSV evidence without changing historical audits or accepting its body."""
+    records = []
+    incomplete = False
+    for ref in attempt.get("payloadFiles") or []:
+        if ref.get("kind") != "csv":
+            continue
+        path = (run_dir / ref["path"]).resolve()
+        if not path.is_relative_to(run_dir) or not path.is_file() or _sha256(path) != ref.get("sha256"):
+            raise WorkbenchError("evidence_hash_mismatch", "legacy CSV path or hash is invalid")
+        try:
+            records.extend({**record.raw, "recordType": record.record_type, "materialId": record.material_id,
+                            "scriptInfo": record.script_info, "parseStatus": record.parse_status}
+                           for record in parse_diagnosis_csv(path))
+        except RpaCsvError:
+            # A malformed attachment is not proof that the platform returned no script.
+            incomplete = True
+            continue
+    if not records:
+        return {}, []
+    tags = sorted({str(record["materialIdTag"]).strip() for record in records if record.get("materialIdTag")})
+    result = content_evidence(records, {"observed": audit.get("observed", {})})
+    incomplete = incomplete or any(record.get("parseStatus") == "failed" for record in records)
+    if incomplete:
+        if not result["scriptContentPresent"]:
+            result["scriptContentPresent"] = None
+        result["scriptContentSha256"] = None
+    return result, tags
+
+
 def _delivery_details(run_dir: Path, script: Mapping[str, Any], outcome: Mapping[str, Any]) -> dict[str, Any]:
     """Keep rejected payload evidence separate from accepted script facts."""
     error = outcome.get("errorCode") or script.get("error")
@@ -136,13 +179,18 @@ def _delivery_details(run_dir: Path, script: Mapping[str, Any], outcome: Mapping
             if not path.is_relative_to(run_dir):
                 raise WorkbenchError("invalid_identity_path", "identity evidence must remain inside the run")
             audit = _read_json(path)
+        legacy, tags = _legacy_content_evidence(run_dir, attempt, audit) if "scriptContentPresent" not in attempt else ({}, [])
+        observed = dict(audit.get("observed", {}))
+        if tags:
+            observed["materialIdTag"] = tags
         evidence.append({
             "attempt": attempt.get("attempt"), "identityState": attempt.get("identityState"),
-            "auditPath": ref, "expected": audit.get("expected", {}), "observed": audit.get("observed", {}),
+            "auditPath": ref, "expected": {"materialId": outcome.get("materialId") or script.get("materialId"), **audit.get("expected", {})}, "observed": observed,
             "mismatchedFields": audit.get("mismatchedFields", []),
-            "scriptContentPresent": attempt.get("scriptContentPresent"),
-            "scriptContentSha256": attempt.get("scriptContentSha256"),
-            "observedIdentitySha256": attempt.get("observedIdentitySha256"),
+            "scriptContentPresent": attempt.get("scriptContentPresent", legacy.get("scriptContentPresent")),
+            "scriptContentSha256": legacy.get("scriptContentSha256", attempt.get("scriptContentSha256")),
+            "observedIdentitySha256": legacy.get("observedIdentitySha256", attempt.get("observedIdentitySha256")),
+            "contentEvidenceSource": "verifiedCsvReplay" if legacy else "persisted" if "scriptContentPresent" in attempt else "unrecorded",
         })
     presence = [item["scriptContentPresent"] for item in evidence]
     returned = True if True in presence else (False if presence and all(value is False for value in presence) else None)
@@ -176,6 +224,9 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
     source_pack_sha = _sha256(source_pack_path)
     scripts = _script_map(pack)
     outcomes = _result_map(run_dir)
+    names = _material_names(run_dir)
+    registry = _field_registry()
+    metric_definitions = {}
     materials: list[dict[str, Any]] = []
     available_fields = {name: [] for name in ("formula", "detail", "data", "text")}
     field_counts = {name: {"available": 0, "missing": 0} for name in available_fields}
@@ -192,14 +243,19 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
             if field == "text":
                 has_field = text_available
             else:
-                has_field = bool(completeness.get({"formula": "formulaLabels", "detail": "detailLabels", "data": "structuredData"}[field])) and _nonempty(script.get(field))
+                has_field = script.get("parseStatus") in {"parsed", "missing"} and bool(completeness.get({"formula": "formulaLabels", "detail": "detailLabels", "data": "structuredData"}[field])) and _nonempty(script.get(field))
             field_available[field] = has_field
             field_counts[field]["available" if has_field else "missing"] += 1
             if has_field:
                 available_fields[field].append(material_id)
         metric_values = dict(material.get("metrics") or {})
+        for key in metric_values:
+            definition = registry.get(key) or next((item for item in registry.values() if key in {item.get("sourceKey"), item.get("label")}), {})
+            metric_definitions[key] = {"label": definition.get("label") or key,
+                                       "unit": definition.get("unit"), "sourceKey": key}
         materials.append({
             "materialId": material_id,
+            "materialName": names.get(material_id),
             "rank": material.get("rank"),
             "metrics": metric_values,
             "sourceRefs": list(material.get("sourceRefs") or []),
@@ -209,6 +265,8 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
                 "parseStatus": script.get("parseStatus", "missing"),
                 "textAvailable": text_available,
                 "fieldAvailability": field_available,
+                "text": script.get("rawText") if text_available else None,
+                **{field: script.get(field) if field_available[field] else None for field in ("formula", "detail", "data")},
                 "textExcerpt": (str(script.get("rawText") or "").strip()[:260] + ("…" if len(str(script.get("rawText") or "").strip()) > 260 else "")) if text_available else None,
                 "materialFactPath": script.get("materialFile"),
                 "sourceRefs": list(script.get("sourceRefs") or []),
@@ -255,6 +313,7 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
         },
         "fieldAvailability": field_counts,
         "materials": materials,
+        "metricDefinitions": metric_definitions,
         "duplicateTextGroups": duplicate_groups,
         "gaps": failure_gaps,
         "sourcePack": {"path": "facts/qianchuan-script-source-pack.json", "sha256": source_pack_sha},
@@ -351,6 +410,23 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _verify_overview_outputs(run_dir: Path, receipt: Mapping[str, Any]) -> None:
+    validate_payload(dict(receipt), "summary-report-receipt.schema.json")
+    outputs = {item["path"]: item["sha256"] for item in receipt["outputs"]}
+    expected = {"overview/summary-data.json": receipt["summarySha256"],
+                "overview/report.md": receipt["reportSha256"]}
+    if receipt.get("htmlReportSha256"):
+        expected["overview/index.html"] = receipt["htmlReportSha256"]
+    if len(outputs) != len(receipt["outputs"]) or any(outputs.get(path) != digest for path, digest in expected.items()):
+        raise WorkbenchError("receipt_mismatch", "overview receipt omits or duplicates required outputs")
+    if "overview/index.html" in outputs and not receipt.get("htmlReportSha256"):
+        raise WorkbenchError("receipt_mismatch", "HTML output has no bound report hash")
+    for ref, digest in outputs.items():
+        path = (run_dir / ref).resolve()
+        if not path.is_relative_to(run_dir) or not path.is_file() or _sha256(path) != digest:
+            raise WorkbenchError("summary_hash_mismatch", "an overview output failed hash verification")
+
+
 def verify_handoff(run_dir: Path) -> tuple[dict[str, Any], dict[str, Any], Path]:
     run_dir = Path(run_dir).expanduser().resolve()
     handoff_path = run_dir / "analysis-handoff.json"
@@ -358,7 +434,7 @@ def verify_handoff(run_dir: Path) -> tuple[dict[str, Any], dict[str, Any], Path]
     validate_payload(handoff, "analysis-handoff.schema.json")
     if handoff["runId"] != run_dir.name:
         raise WorkbenchError("identity_mismatch", "analysis handoff runId differs from its directory")
-    for label in ("sourcePack", "summary", "report"):
+    for label in ("sourcePack", "summary", "report", *(["htmlReport"] if handoff.get("htmlReport") else [])):
         record = handoff[label]
         target = (run_dir / record["path"]).resolve()
         if not target.is_relative_to(run_dir) or not target.is_file() or _sha256(target) != record["sha256"]:
@@ -369,7 +445,7 @@ def verify_handoff(run_dir: Path) -> tuple[dict[str, Any], dict[str, Any], Path]
     if pack.get("runId") != handoff["runId"]:
         raise WorkbenchError("identity_mismatch", "handoff source pack has a different runId")
     overview_receipt = _read_json(run_dir / "overview" / "receipt.json")
-    validate_payload(overview_receipt, "summary-report-receipt.schema.json")
+    _verify_overview_outputs(run_dir, overview_receipt)
     if (
         overview_receipt.get("runId") != run_dir.name
         or overview_receipt.get("sourcePackSha256") != handoff["sourcePack"]["sha256"]
@@ -377,11 +453,25 @@ def verify_handoff(run_dir: Path) -> tuple[dict[str, Any], dict[str, Any], Path]
         or overview_receipt.get("reportSha256") != handoff["report"]["sha256"]
     ):
         raise WorkbenchError("receipt_mismatch", "summary receipt and handoff differ")
+    if handoff.get("htmlReport") and (
+        handoff["htmlReport"]["path"] != "overview/index.html"
+        or handoff["htmlReport"]["sha256"] != overview_receipt.get("htmlReportSha256")
+    ):
+        raise WorkbenchError("receipt_mismatch", "HTML report receipt and handoff differ")
     summary = _read_json(run_dir / handoff["summary"]["path"])
     validate_payload(summary, "summary-data.schema.json")
     if summary.get("runId") != handoff["runId"] or summary.get("sourcePack", {}).get("sha256") != handoff["sourcePack"]["sha256"]:
         raise WorkbenchError("summary_mismatch", "summary data differs from its handoff")
     return handoff, pack, pack_path
+
+
+def _summary_reply(run_dir: Path, handoff: Mapping[str, Any], *, idempotent: bool) -> dict[str, Any]:
+    return {"status": "awaitingAnalysisInput", "workflowState": "awaitingAnalysisInput",
+            "acquisitionState": handoff["acquisitionState"], "runId": run_dir.name,
+            "analysisAllowed": handoff["analysisAllowed"], "outputPath": str(run_dir / "overview"),
+            "reportPath": str(run_dir / "overview/index.html"),
+            "summaryPath": str(run_dir / "overview/summary-data.json"),
+            "handoffPath": str(run_dir / "analysis-handoff.json"), "idempotent": idempotent}
 
 
 def render_summary(run_dir: Path) -> dict[str, Any]:
@@ -395,10 +485,7 @@ def render_summary(run_dir: Path) -> dict[str, Any]:
         receipt = _read_json(receipt_path)
         if receipt.get("sourcePackSha256") != summary["sourcePack"]["sha256"]:
             raise WorkbenchError("summary_source_mismatch", "overview belongs to a different source pack")
-        for record in receipt.get("outputs", []):
-            target = (run_dir / record["path"]).resolve()
-            if not target.is_relative_to(run_dir) or not target.is_file() or _sha256(target) != record["sha256"]:
-                raise WorkbenchError("summary_hash_mismatch", "an existing overview output failed hash verification")
+        _verify_overview_outputs(run_dir, receipt)
         summary_path, report_path = overview / "summary-data.json", overview / "report.md"
         if not summary_path.is_file() or not report_path.is_file():
             raise WorkbenchError("summary_incomplete", "existing overview is missing a required file")
@@ -407,10 +494,30 @@ def render_summary(run_dir: Path) -> dict[str, Any]:
         handoff_path = run_dir / "analysis-handoff.json"
         if handoff_path.exists():
             existing, _pack, _path = verify_handoff(run_dir)
-            return {"status": "awaitingAnalysisInput", "runId": run_dir.name, "analysisAllowed": existing["analysisAllowed"], "outputPath": str(overview), "handoffPath": str(handoff_path), "idempotent": True}
+        else:
+            existing = None
+        html_path = overview / "index.html"
+        upgraded = not receipt.get("htmlReportSha256")
+        if upgraded:
+            html = render_html(summary)
+            if not html.endswith("\n"):
+                html += "\n"
+            if html_path.exists():
+                if not html_path.is_file() or html_path.is_symlink() or html_path.read_text(encoding="utf-8") != html:
+                    raise WorkbenchError("html_exists", "unreceipted HTML differs; refusing to overwrite it")
+            else:
+                _write_text(html_path, html)
+            receipt["htmlReportSha256"] = _sha256(html_path)
+            receipt["outputs"].append({"path": "overview/index.html", "sha256": _sha256(html_path)})
+            atomic_json(receipt_path, receipt)
+        if existing is not None:
+            # Existing analyses bind the old handoff hash. Add the verified HTML
+            # companion without rewriting that handoff or the original report.
+            return _summary_reply(run_dir, existing, idempotent=not upgraded)
+        handoff["htmlReport"] = {"path": "overview/index.html", "sha256": _sha256(html_path)}
         atomic_json(handoff_path, handoff)
         atomic_json(run_dir / "workbench-state.json", {"schemaVersion": 1, "runId": run_dir.name, "state": "awaitingAnalysisInput", "operation": "acquisitionReport", "acquisitionState": summary["acquisitionState"]})
-        return {"status": "awaitingAnalysisInput", "runId": run_dir.name, "analysisAllowed": handoff["analysisAllowed"], "outputPath": str(overview), "handoffPath": str(handoff_path), "idempotent": True}
+        return _summary_reply(run_dir, handoff, idempotent=not upgraded)
 
     overview.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".overview-build-", dir=run_dir) as temporary:
@@ -418,8 +525,12 @@ def render_summary(run_dir: Path) -> dict[str, Any]:
         staging.mkdir()
         summary_path = staging / "summary-data.json"
         report_path = staging / "report.md"
+        html_path = staging / "index.html"
+        html = render_html(summary)
+        validate_payload(summary, "summary-data.schema.json")
         atomic_json(summary_path, summary)
         _write_text(report_path, report)
+        _write_text(html_path, html)
         receipt = {
             "schemaVersion": 1,
             "runId": run_dir.name,
@@ -427,9 +538,11 @@ def render_summary(run_dir: Path) -> dict[str, Any]:
             "sourcePackSha256": summary["sourcePack"]["sha256"],
             "summarySha256": _sha256(summary_path),
             "reportSha256": _sha256(report_path),
+            "htmlReportSha256": _sha256(html_path),
             "outputs": [
                 {"path": "overview/summary-data.json", "sha256": _sha256(summary_path)},
                 {"path": "overview/report.md", "sha256": _sha256(report_path)},
+                {"path": "overview/index.html", "sha256": _sha256(html_path)},
             ],
         }
         validate_payload(receipt, "summary-report-receipt.schema.json")
@@ -437,9 +550,10 @@ def render_summary(run_dir: Path) -> dict[str, Any]:
         os.replace(staging, overview)
     handoff["summary"]["sha256"] = _sha256(overview / "summary-data.json")
     handoff["report"]["sha256"] = _sha256(overview / "report.md")
+    handoff["htmlReport"] = {"path": "overview/index.html", "sha256": _sha256(overview / "index.html")}
     atomic_json(run_dir / "analysis-handoff.json", handoff)
     atomic_json(run_dir / "workbench-state.json", {"schemaVersion": 1, "runId": run_dir.name, "state": "awaitingAnalysisInput", "operation": "acquisitionReport", "acquisitionState": summary["acquisitionState"]})
-    return {"status": "awaitingAnalysisInput", "runId": run_dir.name, "analysisAllowed": handoff["analysisAllowed"], "outputPath": str(overview), "handoffPath": str(run_dir / "analysis-handoff.json"), "idempotent": False}
+    return _summary_reply(run_dir, handoff, idempotent=False)
 
 
 __all__ = ["WorkbenchError", "build_summary", "render_markdown", "render_summary", "verify_handoff"]

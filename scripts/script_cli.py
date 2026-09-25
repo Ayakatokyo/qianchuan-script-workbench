@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import uuid
 from typing import Any, Mapping
 
@@ -156,6 +157,26 @@ def _acquisition_reply(output_dir: Path, result: Path) -> dict[str, Any]:
         reply.update({key: status[key] for key in ("errorCode", "message", "gatePath")})
         reply["firstBatchCsvGate"] = _read_json(output_dir / "first-batch-csv-gate.json")
     return reply
+
+
+def _acquisition_report_reply(output_dir: Path, result: Path) -> dict[str, Any]:
+    reply = _acquisition_reply(output_dir, result)
+    if reply["status"] not in {"ready", "partialFailed"}:
+        return reply
+    try:
+        report = _render_summary(argparse.Namespace(run_dir=output_dir))
+        report_fields = {key: report[key] for key in ("reportPath", "summaryPath", "handoffPath", "analysisAllowed")}
+    except Exception as exc:
+        raise CliError(
+            "acquisition_report_failed",
+            f"采集事实已保存在 {output_dir}（{reply['status']}），但脚本数据报告生成失败：{exc}。"
+            f"修复报告问题后执行 render-summary --run-dir {shlex.quote(str(output_dir))}，无需重新取数。",
+        ) from exc
+    return {
+        **reply, **report_fields,
+        "acquisitionState": reply["status"],
+        "workflowState": "awaitingAnalysisInput",
+    }
 
 
 def _normalize_acquisition_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -380,7 +401,7 @@ def _acquire(args: argparse.Namespace) -> dict[str, Any]:
     except ReportClientError as exc:
         raise CliError("advertiser_authorization_failed", str(exc)) from exc
     result = acquire_scripts(request, output_dir, report_gateway, rpa_gateway, registry=load_field_registry(registry_path))
-    return _acquisition_reply(output_dir, result)
+    return _acquisition_report_reply(output_dir, result)
 
 
 def _external_run_dir(value: Path) -> Path:
@@ -448,7 +469,7 @@ def _continue_acquire(args: argparse.Namespace) -> dict[str, Any]:
     rpa_gateway = RpaGateway(transport=transport, environ=context.environ)
     result = continue_acquire_scripts(request, output_dir, rpa_gateway, registry=registry)
     return {
-        **_acquisition_reply(output_dir, result),
+        **_acquisition_report_reply(output_dir, result),
         "reportRowCount": len(rows),
         "reportSnapshotSha256": receipt["snapshotSha256"],
     }
@@ -1065,10 +1086,13 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
                 raise CliError("missing_output", "acquisition output is absent or outside its run directory")
         if (path / "analysis-handoff.json").is_file():
             try:
-                verify_handoff(path)
+                handoff, _handoff_pack, _handoff_pack_path = verify_handoff(path)
             except WorkbenchError as exc:
                 raise CliError(exc.error_code, str(exc)) from exc
             checked.extend(["overview/summary-data.json", "overview/report.md", "overview/receipt.json", "analysis-handoff.json"])
+            overview_receipt = _read_json(path / "overview/receipt.json")
+            if handoff.get("htmlReport") or overview_receipt.get("htmlReportSha256"):
+                checked.append((handoff.get("htmlReport") or {}).get("path", "overview/index.html"))
     result: dict[str, Any] = {"status": str(status.get("state") or status.get("status") or "unknown"), "outputPath": str(path)}
     result["verification"] = "passed"
     result["checkedFiles"] = checked

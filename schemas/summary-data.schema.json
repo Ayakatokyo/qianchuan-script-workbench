@@ -32,6 +32,7 @@
       "required": ["formula", "detail", "data", "text"],
       "properties": {"formula": {"$ref": "#/$defs/fieldCount"}, "detail": {"$ref": "#/$defs/fieldCount"}, "data": {"$ref": "#/$defs/fieldCount"}, "text": {"$ref": "#/$defs/fieldCount"}}
     },
+    "metricDefinitions": {"type": "object", "additionalProperties": {"type": "object"}},
     "materials": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
     "duplicateTextGroups": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
     "gaps": {"type": "array", "items": {"type": "object", "additionalProperties": true}},

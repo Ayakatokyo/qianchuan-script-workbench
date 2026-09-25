@@ -238,8 +238,24 @@
       "destination": "scripts/workbench_analysis.py"
     },
     {
+      "source": "scripts/workbench_formula_overview.py",
+      "destination": "scripts/workbench_formula_overview.py"
+    },
+    {
+      "source": "scripts/workbench_quote_library.py",
+      "destination": "scripts/workbench_quote_library.py"
+    },
+    {
+      "source": "scripts/workbench_report_html.py",
+      "destination": "scripts/workbench_report_html.py"
+    },
+    {
       "source": "scripts/workbench_reporting.py",
       "destination": "scripts/workbench_reporting.py"
+    },
+    {
+      "source": "scripts/workbench_script_interactions.py",
+      "destination": "scripts/workbench_script_interactions.py"
     }
   ],
   "entrypoint": "scripts/run.py"

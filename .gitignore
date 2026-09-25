@@ -1,6 +1,8 @@
 # Generated packages and local execution data.
 dist/
 runs/
+# User-supplied private acquisition evidence, never package or commit.
+/千川素材脚本数据/
 secondary/
 .cache/
 .venv*/

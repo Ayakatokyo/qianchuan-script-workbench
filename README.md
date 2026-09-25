@@ -8,10 +8,17 @@
 
 - 业务流程和边界：[SKILL.md](SKILL.md)。
 - 运行入口：`python3 scripts/run.py --help`。
+- `acquire` / `continue-acquire` 到达 `ready` 或 `partialFailed` 后，自动校验并生成第一阶段报告 `overview/index.html`；`render-summary` 可离线恢复报告，完成后等待用户输入，不自动进入第二阶段。
 - 独立回归：`python3 tools/test.py`；开发依赖见 `requirements-dev.txt`。
 - 构建本包：`python3 tools/build.py`，输出 `dist/qianchuan-script-workbench.zip`。
 - 可从任意工作目录执行打包器的绝对路径；`--dist-dir` 可指定新的本地产物目录。
-- 正式发行清单：[packaging.json](packaging.json)，只包含显式列出的 60 个文件；ZIP 内保留 `qianchuan-script-workbench/` 根目录。
+- 正式发行清单：[packaging.json](packaging.json)，只包含显式列出的 64 个文件（其中 29 个 Python 文件）；ZIP 内保留 `qianchuan-script-workbench/` 根目录。
+
+## 第一阶段报告
+
+`overview/index.html` 提供素材筛选条件、素材榜单、脚本内容公式、单素材脚本、脚本片段库五个页签。内容公式按素材去重，通过一级柱状图下钻二级环图，图例与环图联动；单素材保留一级/二级步骤顺序、箭头和对应颜色，公式与原文精确引用双向定位，并可复制公式或完整文案。片段库支持一级/二级标签及关键词筛选，每页 12 条，可复制原句并跳转完整脚本。
+
+报告使用已核验的落盘事实，片段必须精确命中所属素材正文；只有明细而无公式映射的原句保留为未分类。HTML 不再提供“完整性与缺口”页或顶部 `partialFailed`/等待第二阶段告示，后台采集状态、身份校验、首批 CSV 门禁和第二阶段准入保持原约束。展示口径与兼容恢复见[输出契约](references/output-contract.md)。
 
 ## 维护与归属
 

@@ -9,6 +9,7 @@
     "sourcePackSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "summarySha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "reportSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "htmlReportSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "outputs": {"type": "array", "minItems": 2, "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"type": "string"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}}
   }
 }

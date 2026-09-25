@@ -6,6 +6,7 @@
     "schemaVersion": {"const": 1}, "runId": {"type": "string", "minLength": 1},
     "workflowState": {"const": "awaitingAnalysisInput"}, "acquisitionState": {"enum": ["ready", "partialFailed"]},
     "sourcePack": {"$ref": "#/$defs/fileRef"}, "summary": {"$ref": "#/$defs/fileRef"}, "report": {"$ref": "#/$defs/fileRef"},
+    "htmlReport": {"$ref": "#/$defs/fileRef"},
     "period": {"type": "object", "additionalProperties": true}, "selection": {"type": "object", "additionalProperties": true},
     "materialIds": {"type": "array", "items": {"type": "string"}},
     "availableScriptMaterialIds": {"type": "array", "items": {"type": "string"}},
