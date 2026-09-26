@@ -29,7 +29,7 @@ pre_input: |
   千川广告主ID：__field:rpa_shop__（必填）
   时间范围：__field:date_range__（必填）
   脚本素材数：__field:top_n__（必填）
-  素材筛选与排序：__field:material_filter_sort__（可选；例如筛选“整体消耗”>=10000，再按“视频播放数”降序；排序指标和排序方向均可留空）。
+  素材筛选与排序：__field:material_filter_sort__（可选；例如筛选“整体消耗”>=10000，再按“净成交ROI”降序；排序指标和排序方向均可留空）。
 skill_form:
   - key: api_shop
     type: api_shop
