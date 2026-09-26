@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import tempfile
@@ -91,6 +92,79 @@ def _field_registry() -> dict[str, dict[str, Any]]:
     return {}
 
 
+def _report_catalog() -> dict[str, dict[str, Any]]:
+    path = Path(__file__).resolve().parent.parent / "config/report-metric-labels.json"
+    return {item["id"]: item for item in _read_json(path)["fields"]}
+
+
+def _leaderboard(run_dir: Path, materials: list, selection: Mapping, definitions: dict) -> dict:
+    """Keep the full report independent of the TopN script/analysis scope."""
+    receipt_path = run_dir / "report-query-receipt.json"
+    if not receipt_path.is_file():
+        return {"scope": "selectedMaterials", "materials": [
+            {key: item.get(key) for key in ("materialId", "materialName", "rank", "metrics")}
+            for item in materials], "metricDefinitions": definitions}
+    receipt = _read_json(receipt_path)
+    path = run_dir / "source-data/material-report-snapshot.json"
+    if (receipt.get("runId") != run_dir.name or receipt.get("status") != "completed"
+            or receipt.get("snapshotPath") != "source-data/material-report-snapshot.json"
+            or not path.resolve().is_relative_to(run_dir) or _sha256(path) != receipt.get("snapshotSha256")):
+        raise WorkbenchError("report_snapshot_mismatch", "leaderboard snapshot differs from its receipt")
+    snapshot = _read_json(path)
+    rows = snapshot.get("rows")
+    if not isinstance(rows, list):
+        raise WorkbenchError("report_snapshot_mismatch", "leaderboard rows must be an array")
+    digest = hashlib.sha256(json.dumps(rows, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if (snapshot.get("complete") is not True or snapshot.get("recordCount") != len(rows)
+            or receipt.get("recordCount") != len(rows) or digest != snapshot.get("rowsSha256")
+            or digest != receipt.get("rowsSha256")
+            or any(snapshot.get(key) != receipt.get(key) for key in ("queryFingerprint", "scopeFingerprint"))):
+        raise WorkbenchError("report_snapshot_mismatch", "leaderboard rows failed integrity verification")
+    catalog = _report_catalog()
+    registry = _field_registry()
+    all_definitions, projected = {}, []
+    identity = {"id": "material_id", "label": "素材ID", "sourceKey": "materialId"}
+    for index, row in enumerate(rows):
+        if not isinstance(row, Mapping):
+            raise WorkbenchError("invalid_report_row", "leaderboard row must be an object")
+        metrics, displays = {}, {}
+        source_metrics = row.get("metrics") or {}
+        if not isinstance(source_metrics, Mapping):
+            raise WorkbenchError("invalid_report_row", "report metrics must be an object")
+        # Live nested metrics, and historical flat rows using the known registry.
+        keys = list(source_metrics) if isinstance(source_metrics, Mapping) and source_metrics else [
+            key for key, field in registry.items() if _value_at(row, field) is not None]
+        for key in keys:
+            value = source_metrics.get(key) if key in source_metrics else _value_at(row, registry[key])
+            raw = value.get("Value") if isinstance(value, Mapping) else value
+            display = value.get("ValueStr", raw) if isinstance(value, Mapping) else raw
+            if not isinstance(raw, (str, int, float, type(None))) or isinstance(raw, bool):
+                continue
+            if isinstance(raw, float) and not math.isfinite(raw):
+                continue
+            if not isinstance(display, (str, int, float, type(None))):
+                display = raw
+            metrics[key], displays[key] = raw, display
+            field = catalog.get(key) or definitions.get(key) or {}
+            all_definitions[key] = {"label": field.get("label") or key, "sourceKey": key,
+                                    "unit": field.get("unit"), "group": field.get("group", "其他指标")}
+        projected.append({"materialId": str(_value_at(row, identity) or ""),
+                          "materialName": _get(row, ALIASES["materialName"]), "rank": index + 1,
+                          "metrics": metrics, "metricDisplay": displays})
+    ranking_key = (selection.get("rankingMetric") or {}).get("sourceKey") or selection.get("rankingField")
+    def sort_value(item):
+        try:
+            value = float(item["metrics"].get(ranking_key))
+            if not math.isfinite(value):
+                raise ValueError()
+            return (False, value if selection.get("direction") == "asc" else -value)
+        except (TypeError, ValueError):
+            return (True, 0)
+    projected.sort(key=sort_value)
+    return {"scope": "fullReport", "materials": projected, "metricDefinitions": all_definitions,
+            "sourceRef": {"path": receipt["snapshotPath"], "sha256": receipt["snapshotSha256"]}}
+
+
 def _source_ref_label(value: Any) -> str:
     if isinstance(value, Mapping):
         path = str(value.get("path") or "")
@@ -105,13 +179,14 @@ def _selection_summary(pack: Mapping[str, Any]) -> dict[str, Any]:
     selection = dict(pack.get("selection") or {})
     ranking_field = str(selection.get("rankingField") or "")
     registry = _field_registry()
+    catalog = _report_catalog()
     definition = registry.get(ranking_field) or next((item for item in registry.values() if item.get("label") == ranking_field), None)
     return {
         "rankingField": ranking_field,
-        "rankingLabel": selection.get("rankingLabel") or (definition or {}).get("label") or ranking_field,
+        "rankingLabel": catalog.get(ranking_field, {}).get("label") or selection.get("rankingLabel") or (definition or {}).get("label") or ranking_field,
         "rankingMetric": {
             "fieldId": (definition or {}).get("id") or (ranking_field or None),
-            "label": selection.get("rankingLabel") or (definition or {}).get("label") or (ranking_field or None),
+            "label": catalog.get(ranking_field, {}).get("label") or selection.get("rankingLabel") or (definition or {}).get("label") or (ranking_field or None),
             "sourceKey": (definition or {}).get("sourceKey") or (ranking_field or None),
             "unit": (definition or {}).get("unit"),
             "definitionAvailable": definition is not None,
@@ -226,6 +301,7 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
     outcomes = _result_map(run_dir)
     names = _material_names(run_dir)
     registry = _field_registry()
+    catalog = _report_catalog()
     metric_definitions = {}
     materials: list[dict[str, Any]] = []
     available_fields = {name: [] for name in ("formula", "detail", "data", "text")}
@@ -251,7 +327,7 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
         metric_values = dict(material.get("metrics") or {})
         for key in metric_values:
             definition = registry.get(key) or next((item for item in registry.values() if key in {item.get("sourceKey"), item.get("label")}), {})
-            metric_definitions[key] = {"label": definition.get("label") or key,
+            metric_definitions[key] = {"label": catalog.get(key, {}).get("label") or definition.get("label") or key,
                                        "unit": definition.get("unit"), "sourceKey": key}
         materials.append({
             "materialId": material_id,
@@ -318,6 +394,7 @@ def build_summary(run_dir: Path) -> tuple[dict[str, Any], str, dict[str, Any]]:
         "gaps": failure_gaps,
         "sourcePack": {"path": "facts/qianchuan-script-source-pack.json", "sha256": source_pack_sha},
     }
+    summary["leaderboard"] = _leaderboard(run_dir, materials, selection, metric_definitions)
     report = render_markdown(summary)
     handoff = {
         "schemaVersion": 1,

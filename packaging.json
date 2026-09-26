@@ -256,6 +256,14 @@
     {
       "source": "scripts/workbench_script_interactions.py",
       "destination": "scripts/workbench_script_interactions.py"
+    },
+    {
+      "source": "config/report-metric-labels.json",
+      "destination": "config/report-metric-labels.json"
+    },
+    {
+      "source": "scripts/workbench_metric_picker.py",
+      "destination": "scripts/workbench_metric_picker.py"
     }
   ],
   "entrypoint": "scripts/run.py"

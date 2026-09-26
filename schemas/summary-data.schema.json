@@ -33,6 +33,16 @@
       "properties": {"formula": {"$ref": "#/$defs/fieldCount"}, "detail": {"$ref": "#/$defs/fieldCount"}, "data": {"$ref": "#/$defs/fieldCount"}, "text": {"$ref": "#/$defs/fieldCount"}}
     },
     "metricDefinitions": {"type": "object", "additionalProperties": {"type": "object"}},
+    "leaderboard": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "materials", "metricDefinitions"],
+      "properties": {
+        "scope": {"enum": ["fullReport", "selectedMaterials"]},
+        "materials": {"type": "array", "items": {"type": "object"}},
+        "metricDefinitions": {"type": "object", "additionalProperties": {"type": "object"}},
+        "sourceRef": {"$ref": "#/$defs/fileRef"}
+      }
+    },
     "materials": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
     "duplicateTextGroups": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
     "gaps": {"type": "array", "items": {"type": "object", "additionalProperties": true}},

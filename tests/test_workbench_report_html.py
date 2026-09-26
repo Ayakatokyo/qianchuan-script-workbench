@@ -80,13 +80,15 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         from workbench_report_html import render_html
         return render_html(example() if summary is None else summary)
 
-    def test_full_script_and_structures_remain_readable_without_javascript(self):
+    def test_full_script_remains_readable_without_raw_or_audit_panels(self):
         summary = example()
         doc = Document(self.render(summary))
         self.assertEqual(doc.find("div", **{"class": "script-text"})[0]["text"], summary["materials"][0]["script"]["text"])
-        self.assertIn("结构化细节", doc.find("body")[0]["text"])
-        self.assertIn("场景", doc.find("body")[0]["text"])
-        self.assertTrue(doc.find("details"))
+        self.assertNotIn("平台原始结构", doc.find("body")[0]["text"])
+        self.assertNotIn("身份核对与数据来源", doc.find("body")[0]["text"])
+        self.assertNotIn("结构化细节", doc.find("body")[0]["text"])
+        self.assertFalse(doc.find("details", **{"class": "raw-fields"}))
+        self.assertFalse(doc.find("details", **{"class": "evidence"}))
         self.assertFalse(any("hidden" in e["attrs"] for e in doc.find("article")))
 
     def test_zero_and_absent_metrics_are_distinct_in_comparison(self):
@@ -106,20 +108,22 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         self.assertNotIn("partialFailed", html)
         self.assertNotIn("等待第二阶段输入", html)
         self.assertNotIn("完整性与缺口", html)
-        self.assertIn("素材一", html)
+        self.assertNotIn("素材一", html)
 
-    def test_missing_body_preserves_verified_structure_fields(self):
+    def test_missing_body_keeps_readable_formula_without_raw_structure(self):
         summary = example()
         script = summary["materials"][0]["script"]
         script.update(deliveryStatus="missing", statusLabel="平台未返回可用正文", parseStatus="missing",
                       text=None, textAvailable=False)
         script["fieldAvailability"]["text"] = False
+        script["data"] = [{"level_1_label": {"value": 1, "label": "商品卖点"}, "level_2_labels": [{"value": 2, "label": "适用场景"}]}]
         doc = Document(self.render(summary))
         article = doc.find("article")[0]["text"]
         self.assertIn("可信脚本正文：未提供", article)
-        self.assertIn("结构化细节", article)
-        self.assertIn("场景", article)
-        self.assertIn("片段数", article)
+        self.assertIn("商品卖点", article)
+        self.assertIn("适用场景", article)
+        self.assertNotIn("结构化细节", article)
+        self.assertNotIn("片段数", article)
         self.assertFalse(doc.find("div", **{"class": "script-text"}))
 
     def test_html_and_script_values_cannot_create_elements_or_events(self):
@@ -137,15 +141,16 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         self.assertFalse(any(key.startswith("on") for e in doc.elements for key in e["attrs"]))
         self.assertEqual(doc.find("div", **{"class": "script-text"})[0]["text"], attack)
 
-    def test_evidence_links_are_only_encoded_paths_inside_run(self):
+    def test_source_and_audit_paths_are_not_exposed_in_report(self):
         summary = example()
         rejected = ["javascript:alert(1)", "https://evil.invalid/x", "//evil.invalid/x", "/etc/passwd", "../secret.json",
                     "source-data/../../secret.json", "source-data/%2e%2e/secret", "source-data\\..\\secret", "source-data/x?next=//evil", "source-data/x#target"]
         summary["materials"][0]["sourceRefs"] = [{"path": path} for path in rejected] + [{"path": "source-data/中文 报表.json"}]
         doc = Document(self.render(summary))
         hrefs = [e["attrs"]["href"] for e in doc.find("a")]
-        self.assertIn("../source-data/%E4%B8%AD%E6%96%87%20%E6%8A%A5%E8%A1%A8.json", hrefs)
-        self.assertIn("../facts/materials/m1.json", hrefs)
+        self.assertTrue(all(href.startswith("#") for href in hrefs))
+        self.assertNotIn("source-data/", doc.find("body")[0]["text"])
+        self.assertNotIn("facts/materials/", doc.find("body")[0]["text"])
         self.assertFalse(any(href.startswith(("http:", "https:", "javascript:", "//", "/")) for href in hrefs))
         self.assertFalse(any("secret" in href or "?" in href for href in hrefs))
 
@@ -170,6 +175,10 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         self.assertTrue(doc.find("select", id="single-material-search") or doc.find("input", id="single-material-search"))
         self.assertTrue(doc.find("button", id="next-page"))
         self.assertTrue(doc.find("button", **{"data-sort-metric": "cost"}))
+        self.assertFalse(doc.find("select", id="status-filter"))
+        self.assertNotIn("脚本状态", doc.find("thead")[0]["text"])
+        self.assertNotIn("排名", doc.find("thead")[0]["text"])
+        self.assertEqual(len(doc.find("th")), 3)
 
     def test_formula_coverage_uses_verified_unique_materials_and_source_labels(self):
         summary = example()
@@ -179,6 +188,7 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
             {"level_1_label": {"value": 1, "label": "价格优惠"}, "level_2_labels": [{"value": 21, "label": "降价/折扣"}]},
         ]
         first["detail"] = {"21": {"label": "降价/折扣", "list": ["折扣原句"]}}
+        first["text"] = "真实正文中的折扣原句。"
         second = summary["materials"][1]["script"]
         second.update(data=first["data"], detail=first["detail"], fieldAvailability=first["fieldAvailability"])
         doc = Document(self.render(summary))
@@ -201,7 +211,8 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         self.assertTrue(doc.find("section", **{"data-section-panel": "scripts"}))
         panel = doc.find("section", **{"data-section-panel": "scripts"})[0]["text"]
         self.assertIn("暂无可展示的内容公式标签", panel)
-        self.assertIn("999", doc.find("article")[0]["text"])
+        self.assertNotIn("999", doc.find("article")[0]["text"])
+        self.assertNotIn("888", doc.find("article")[0]["text"])
 
     def test_rendered_interactions_filter_sort_page_and_select_material(self):
         node = shutil.which("node")
@@ -214,7 +225,9 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
             item = deepcopy(original)
             item.update(materialId=f"m{index}", materialName=f"中文素材{index}", rank=index + 1,
                         metrics={"cost": index if index < 11 else None})
-            item["script"]["text"] = "Café 全角Ａ正文" if index == 0 else f"完整正文{index}"
+            if index == 0:
+                item["materialName"] = "Café 全角Ａ素材"
+            item["script"]["text"] = f"正文专属关键词{index}"
             if index == 10:
                 item["script"].update(deliveryStatus="identityMismatch", statusLabel="身份不一致", text=None, textAvailable=False)
             summary["materials"].append(item)
@@ -230,7 +243,7 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
                         break
                     cursor = cursor.get("parent")
             return values
-        cards = [{"attrs": element["attrs"], "search": descendants(element, {"material-name", "material-id", "script-text"})} for element in doc.find("article")]
+        cards = [{"attrs": element["attrs"], "search": descendants(element, {"material-name", "material-id"})} for element in doc.find("article")]
         rows = []
         for row in doc.find("tr", **{"class": "material-row"}):
             cells = [e for e in doc.elements if e.get("parent") is row and "data-metric" in e["attrs"]]
@@ -248,7 +261,6 @@ function element(attrs = {}, text = "") {
 }
 const elements = payload.elements.map(item => element(item.attrs, item.text));
 const controls = new Map(elements.filter(item => item.attrs.id).map(item => [item.attrs.id, item]));
-controls.get("status-filter").value = "all";
 const cards = payload.cards.map(item => {const el = element(item.attrs);el.querySelectorAll = () => item.search.map(textContent => ({textContent}));return el;});
 const rows = payload.rows.map(item => {const el = element(item.attrs);el.querySelectorAll = () => item.cells.map(cell => element(cell.attrs, cell.text));return el;});
 const nav = elements.filter(item => "section" in item.dataset);
@@ -271,13 +283,14 @@ check(JSON.stringify(visibleRows()) === "[10,11]", "Next page");
 controls.get("material-search").value = "ｃａｆé";controls.get("material-search").oninput();
 check(JSON.stringify(visibleRows()) === "[0]", "Unicode search");
 controls.get("material-search").value = "";controls.get("material-search").oninput();
-controls.get("status-filter").value = "identityMismatch";controls.get("status-filter").onchange();
-check(JSON.stringify(visibleRows()) === "[10]", "Status filter");
-controls.get("status-filter").value = "all";controls.get("status-filter").onchange();
+check(!controls.has("status-filter"), "No status control");
+controls.get("material-search").value = "正文专属关键词";controls.get("material-search").oninput();
+check(visibleRows().length === 0, "Title and ID search only");
+controls.get("material-search").value = "";controls.get("material-search").oninput();
+sortButtons.find(button => button.dataset.sortMetric === "cost").onclick();
+check(visibleRows()[0] === 0 && !visibleRows().includes(11), "Zero survives ascending and null-last sorting");
 sortButtons.find(button => button.dataset.sortMetric === "cost").onclick();
 check(visibleRows()[0] === 10 && !visibleRows().includes(11), "Descending and null-last sorting");
-sortButtons.find(button => button.dataset.sortMetric === "cost").onclick();
-check(visibleRows()[0] === 0, "Zero survives ascending sort");
 openers.find(button => button.dataset.openMaterial === "4").onclick({preventDefault(){}});
 check(cards.filter(card => !card.hidden).length === 1 && !cards[4].hidden, "Single material selection");
 check(!panels.find(panel => panel.dataset.sectionPanel === "single-material").hidden, "Selection enters detail");

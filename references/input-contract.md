@@ -32,7 +32,9 @@ python "$SKILL_ROOT/scripts/run.py" render-summary --run-dir "$RUN_DIR"
 
 阶段一报告要求 source pack、收据、选择记录、RPA 结果与来源哈希全部通过 `verify`。实时 acquire/continue-acquire 在完成后自动执行该门禁，将查询周期、选材条件及完整可信脚本映射到 `overview/index.html`、`overview/summary-data.json`、兼容 `overview/report.md`、`overview/receipt.json` 及 `analysis-handoff.json`；render-summary 用于离线恢复。报告只读已落盘事实。`partialFailed` 保持部分失败；继续处理须在每个阶段二命令显式传入 `--allow-partial`。
 
-HTML 内的素材搜索、状态筛选、指标排序、公式下钻及片段库一级/二级/关键词过滤都只改变本地展示，不是新的采集入参，也不修改选材范围、事实包或触发报表/RPA/模型。复制原句和跳转完整脚本沿用同一素材的已核验内容。移除“完整性与缺口”页和顶部运行状态告示不放宽上述校验与 `--allow-partial` 要求。
+HTML 内全量报表榜单的素材标题/ID搜索、自定义指标选择/顺序、指标排序、公式下钻及片段库一级/二级标签点击和关键词过滤都只改变本地展示，不是新的采集入参，也不修改选材范围、事实包或触发报表/RPA/模型。复制原句和跳转完整脚本沿用同一素材的已核验内容。移除脚本状态筛选/列、原始结构与身份来源折叠区、“完整性与缺口”页和顶部运行状态告示，不放宽上述校验与 `--allow-partial` 要求；summary、facts 和审计记录继续保留原字段与证据。
+
+全量榜单只读取收据绑定的完整快照；不对未采集素材补抓脚本。报告展示目录中的指标不自动进入采集筛选和阶段二指标白名单；`total_ecpm_for_roi2` 的报告名称为“整体千次展现费用”，旧“千次曝光成本”采集别名仍兼容。
 
 阶段二计划通过 `script-analysis-plan.schema.json` 校验，必须显式包括本轮 `runId`、唯一 `analysisId`、`operation=analysis`、用户请求原文、素材范围、脚本字段、指标字段、分组/比较方式和输出目标。素材范围只能是事实包中的全部、排名区间或素材 ID；指标字段须存在于包内注册表。计划不接受新的账户、周期、TopN、筛选排序或 RPA 参数。未知字段或无可用字段返回缺口；不可把缺失补成零。
 
