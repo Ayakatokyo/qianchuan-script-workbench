@@ -169,7 +169,7 @@ class IntakeAndLiveContractTests(unittest.TestCase):
                 self.assertEqual(metadata_text.count(f"__field:{field}__"), 1, name)
             self.assertFalse(any(f"__field:{field}__" in metadata_text for field in FORBIDDEN_PUBLIC_FIELDS), name)
             self.assertIn("千川广告主ID：__field:rpa_shop__", metadata_text, name)
-            self.assertIn("例如筛选“整体消耗”>=10000，再按“视频播放数”降序", metadata_text, name)
+            self.assertIn("例如筛选“整体消耗”>=10000，再按“净成交ROI”降序", metadata_text, name)
             self.assertNotIn("（RPA 授权）", metadata_text, name)
             self.assertNotIn("广告主数字 ID 会从授权项自动核验", metadata_text, name)
 

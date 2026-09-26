@@ -123,6 +123,25 @@ def material_reference_analyses(selection: dict) -> list[dict]:
 
 
 class Batch3WorkbenchTests(unittest.TestCase):
+    def test_second_stage_can_use_reported_net_transaction_roi(self):
+        with tempfile.TemporaryDirectory(prefix="batch3-workbench-roi-") as directory:
+            root = Path(directory)
+            run_dir = synthetic_run(root)
+            source_path = run_dir / "facts" / "qianchuan-script-source-pack.json"
+            source_pack = json.loads(source_path.read_text(encoding="utf-8"))
+            source_pack["materials"][0]["metrics"]["total_prepay_and_pay_settle_roi2_1h"] = 1.1
+            source_pack["materials"][1]["metrics"]["total_prepay_and_pay_settle_roi2_1h"] = 2.3
+            write_json(source_path, source_pack)
+            render_summary(run_dir)
+            plan = plan_for(run_dir)
+            plan["metricFields"] = ["total_prepay_and_pay_settle_roi2_1h"]
+            plan_path = root / "roi-plan.json"
+            write_json(plan_path, plan)
+            prepared = prepare_analysis(run_dir, plan_path)
+            facts = json.loads((Path(prepared["outputPath"]) / "facts-slice.json").read_text(encoding="utf-8"))
+            self.assertEqual(facts["materials"][0]["metrics"]["total_prepay_and_pay_settle_roi2_1h"]["value"], 1.1)
+            self.assertEqual(facts["materials"][1]["metrics"]["total_prepay_and_pay_settle_roi2_1h"]["value"], 2.3)
+
     def test_summary_analysis_publish_and_verify_preserve_per_material_evidence(self):
         with tempfile.TemporaryDirectory(prefix="batch3-workbench-") as directory:
             root = Path(directory)

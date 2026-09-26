@@ -8,6 +8,7 @@ from short_video_foundation.qianchuan_script_acquisition.contracts import Acquis
 from short_video_foundation.qianchuan_script_acquisition.field_registry import FieldRegistry, load_field_registry
 from short_video_foundation.qianchuan_script_acquisition.report_client import (
     DATA_TOPIC,
+    DEFAULT_METRICS,
     FUNCTION_CODE,
     ReportClientError,
     RuntimeContext,
@@ -115,6 +116,24 @@ class Batch3ReportQueryTests(unittest.TestCase):
         selected = select_materials(self.rows, live_request(sort={"filters": [{"field": "千次曝光成本", "operator": "gte", "value": "1.10"}]}), self.registry)
         self.assertEqual([item.material_id for item in selected], ["m-2", "m-1"])
         self.assertEqual(selected[0].metrics["total_ecpm_for_roi2"], "2.20")
+
+    def test_all_requested_report_metrics_are_available_for_local_selection(self):
+        registered = {entry["id"] for entry in self.registry.entries() if entry["kind"] == "metric"}
+        self.assertEqual(registered, set(DEFAULT_METRICS))
+        self.assertEqual(len(registered), 102)
+        self.assertEqual(self.registry.require("净成交ROI")["id"], "total_prepay_and_pay_settle_roi2_1h")
+        self.assertEqual(self.registry.require("千次曝光成本")["id"], "total_ecpm_for_roi2")
+
+        rows = [
+            {"materialId": "m-low", "metrics": {"stat_cost_for_roi2": {"Value": 12000}, "total_prepay_and_pay_settle_roi2_1h": {"Value": 1.1}}},
+            {"materialId": "m-high", "metrics": {"stat_cost_for_roi2": {"Value": 15000}, "total_prepay_and_pay_settle_roi2_1h": {"Value": 2.3}}},
+        ]
+        request = live_request(topN=1, sort={"sortField": "净成交ROI", "direction": "desc", "filters": [
+            {"field": "整体消耗", "operator": "gte", "value": 10000},
+        ]})
+        selected = select_materials(rows, request, self.registry)
+        self.assertEqual([item.material_id for item in selected], ["m-high"])
+        self.assertEqual(selected[0].metrics["total_prepay_and_pay_settle_roi2_1h"], "2.3")
 
     def test_overall_spend_and_composite_cost_have_distinct_field_ids_and_rankings(self):
         rows = [

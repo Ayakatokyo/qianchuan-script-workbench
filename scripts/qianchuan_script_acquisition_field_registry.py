@@ -40,17 +40,18 @@ def decimal_text(value: Decimal) -> str:
 def _value_at(row: Mapping[str, Any], entry: Mapping[str, Any]) -> Any:
     field_id = entry["id"]
     label = entry.get("label")
+    aliases = entry.get("aliases") or []
     for container_name in ("metrics", "dimensions"):
         container = row.get(container_name)
         if isinstance(container, Mapping):
-            for key in (field_id, label):
+            for key in (field_id, label, *aliases):
                 if key in container:
                     value = container[key]
                     if isinstance(value, Mapping):
                         numeric_value = value.get("Value")
                         return value.get("ValueStr") if numeric_value is None else numeric_value
                     return value
-    for key in (field_id, label, entry.get("sourceKey")):
+    for key in (field_id, label, *aliases, entry.get("sourceKey")):
         if key and key in row:
             return row[key]
     source = entry.get("source")
@@ -86,6 +87,11 @@ class FieldRegistry:
             label = str(entry.get("label") or "").strip()
             if not field_id or field_id in by_id or not label or label in by_label:
                 raise FieldRegistryError("field registry has an invalid or duplicate field")
+            aliases = entry.get("aliases", [])
+            if not isinstance(aliases, list) or any(not isinstance(alias, str) or not alias.strip() for alias in aliases):
+                raise FieldRegistryError("field registry aliases must be nonempty strings")
+            if len(set(aliases)) != len(aliases) or any(alias in by_label or alias == label for alias in aliases):
+                raise FieldRegistryError("field registry has a duplicate field alias")
             if entry.get("kind") not in {"dimension", "metric"}:
                 raise FieldRegistryError("field registry field kind is invalid")
             operators = entry.get("operators")
@@ -93,6 +99,8 @@ class FieldRegistry:
                 raise FieldRegistryError("field registry operators must be a string list")
             by_id[field_id] = dict(entry)
             by_label[label] = field_id
+            for alias in aliases:
+                by_label[alias] = field_id
         return cls(str(payload.get("registryVersion") or ""), by_id, by_label)
 
     def require(self, field: str) -> dict[str, Any]:
@@ -111,7 +119,7 @@ class FieldRegistry:
 
     def resolve_query(self, spec: Mapping[str, Any] | None) -> "MaterialQuery":
         spec = dict(spec or {})
-        sort_field = spec.get("sortField") or spec.get("field") or "千次曝光成本"
+        sort_field = spec.get("sortField") or spec.get("field") or "整体千次展现费用"
         try:
             sort_entry = self.require(sort_field)
         except QueryError as exc:
