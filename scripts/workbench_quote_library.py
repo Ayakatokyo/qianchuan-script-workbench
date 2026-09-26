@@ -60,6 +60,15 @@ def _collect(materials: Iterable[Mapping[str, Any]], groups_for_script: Callable
     return list(entries.values())
 
 
+
+def _chip(level: str, key: str, label: str, count: int, color: str) -> str:
+    return (f'<button type="button" class="quote-library-chip" data-library-{level}-filter="{key}" '
+            f'data-library-chip-label="{_e(label)}" data-library-chip-color="{color}" '
+            f'style="--chip-color:{color}" aria-pressed="{"true" if not key else "false"}" aria-label="{_e(label)}，{count} 条片段">'
+            f'<i class="quote-library-chip-dot" aria-hidden="true"></i><span>{_e(label)}</span>'
+            f'<span class="quote-library-chip-count" data-library-chip-count>{count}</span></button>')
+
+
 def render_quote_library(materials: Iterable[Mapping[str, Any]], groups_for_script: Callable) -> str:
     """Render a static library; SCRIPT adds filters, paging, and clipboard support.
 
@@ -69,23 +78,29 @@ def render_quote_library(materials: Iterable[Mapping[str, Any]], groups_for_scri
     entries = _collect(materials, groups_for_script)
     primary_keys: dict[str | None, str] = {}
     secondary_keys: dict[str, str] = {}
-    secondary_parents: dict[str, set[str]] = {}
+    secondary_colors: dict[str, str] = {}
     for entry in entries:
         for primary, secondary in entry['tags']:
-            primary_key = primary_keys.setdefault(primary, f'p{len(primary_keys)}')
+            primary_keys.setdefault(primary, f'p{len(primary_keys)}')
             if secondary is not None:
                 secondary_keys.setdefault(secondary, f's{len(secondary_keys)}')
-                secondary_parents.setdefault(secondary, set()).add(primary_key)
+                secondary_colors.setdefault(secondary, _COLORS.get(primary, '#64748b'))
     parts = ['<div class="workbench-quote-library" data-quote-library>',
              '<div class="quote-library-heading"><div><p class="quote-library-eyebrow">从内容公式找到原句</p><h2>脚本片段库</h2><p class="quote-library-description">按标签浏览脚本摘录，找到原句后可复制，或回到素材查看完整上下文。</p></div>',
              f'<span class="quote-library-total">{len(entries)} <small>条片段</small></span></div>',
-             '<div class="quote-library-controls" data-library-controls hidden>',
+             '<div class="quote-library-controls" data-library-controls>',
              '<label class="quote-library-search-label">搜索原句或素材名称<input type="search" data-library-search placeholder="例如：开场、福利或素材名称"></label>',
-             '<label>一级内容公式<select data-library-primary-filter><option value="">全部一级标签</option>']
-    parts.extend(f'<option value="{key}">{_e(label if label is not None else "未分类")}</option>' for label, key in primary_keys.items())
-    parts.append('</select></label><label>二级内容公式<select data-library-secondary-filter><option value="">全部二级标签</option>')
-    parts.extend(f'<option value="{key}" data-library-parents="{" ".join(sorted(secondary_parents[label]))}">{_e(label)}</option>' for label, key in secondary_keys.items())
-    parts.append('</select></label></div><p class="quote-library-result" data-library-result aria-live="polite">全部片段</p><div class="quote-library-grid">')
+             '<div class="quote-library-filter-group" role="group" aria-label="一级内容公式"><span class="quote-library-filter-title">一级内容公式</span><div class="quote-library-chips">',
+             _chip('primary', '', '全部', len(entries), '#2563eb')]
+    for label, key in primary_keys.items():
+        count = sum(any(primary == label for primary, _ in entry['tags']) for entry in entries)
+        parts.append(_chip('primary', key, label if label is not None else '未分类', count, _COLORS.get(label, '#64748b')))
+    parts.append('</div></div><div class="quote-library-filter-group" role="group" aria-label="二级内容公式"><span class="quote-library-filter-title">二级内容公式</span><div class="quote-library-chips">')
+    parts.append(_chip('secondary', '', '全部', len(entries), '#2563eb'))
+    for label, key in secondary_keys.items():
+        count = sum(any(secondary == label for _, secondary in entry['tags']) for entry in entries)
+        parts.append(_chip('secondary', key, label, count, secondary_colors[label]))
+    parts.append('</div></div><p class="quote-library-count-note">标签数字为片段数，不随搜索改变。</p></div><p class="quote-library-result" data-library-result aria-live="polite">全部片段</p><div class="quote-library-grid">')
     for entry in entries:
         color = _COLORS.get(entry['tags'][0][0], '#64748b')
         parts.append(f'<div class="quote-library-card" style="--quote-accent:{color}" data-library-card><div class="quote-library-tags">')
@@ -109,7 +124,7 @@ def render_quote_library(materials: Iterable[Mapping[str, Any]], groups_for_scri
 
 
 CSS = """
-.workbench-quote-library{min-width:0}.quote-library-heading{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:23px 26px;margin-bottom:18px;border:1px solid #dce6f5;border-radius:16px;background:linear-gradient(115deg,#eef5ff 0%,#fff 76%)}.quote-library-eyebrow{font-size:11px;color:#4878b7;margin:0 0 9px;letter-spacing:.08em}.quote-library-heading h2{font-size:24px;margin:0 0 8px;color:#172b4b}.quote-library-description{font-size:13px;line-height:1.75;color:#63708a;margin:0;max-width:650px}.quote-library-total{flex:none;color:#2563eb;font-size:34px;font-variant-numeric:tabular-nums;font-weight:650;text-align:center}.quote-library-total small{display:block;font-size:11px;color:#7185a1;font-weight:400;margin-top:3px}.quote-library-controls{display:grid;grid-template-columns:minmax(200px,1.7fr) minmax(150px,1fr) minmax(150px,1fr);gap:14px;padding:16px 18px;border:1px solid #dfe6f0;border-radius:14px;background:#fff}.quote-library-controls label{display:flex;flex-direction:column;gap:7px;font-size:12px;color:#63708a}.quote-library-controls input,.quote-library-controls select{width:100%;min-width:0;height:43px;padding:9px 12px;border:1px solid #c9d5e5;border-radius:8px;background:#fff;color:#172033;font-size:13px}.quote-library-result{font-size:12px;color:#63708a;margin:16px 3px}.quote-library-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch}.quote-library-card{min-width:0;display:flex;flex-direction:column;border:1px solid #dce5f0;border-top:3px solid var(--quote-accent);border-radius:13px;background:#fff;box-shadow:0 7px 20px rgba(34,64,112,.04);padding:20px 20px 15px}.quote-library-tags{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}.quote-library-tag{display:inline-flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:11px;line-height:1.6;padding:4px 8px;border-radius:6px;color:var(--quote-accent);background:color-mix(in srgb,var(--quote-accent) 8%,white);border:1px solid color-mix(in srgb,var(--quote-accent) 17%,white);overflow-wrap:anywhere}.quote-library-tag strong{font-weight:600}.quote-library-tag-separator{opacity:.45}.quote-library-card blockquote{flex:1;margin:0 0 20px;padding:0;border:0;color:#273a52;font-size:14px;line-height:1.95;white-space:pre-wrap;overflow-wrap:anywhere}.quote-library-card-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid #edf1f7;padding-top:13px}.quote-library-source{min-width:0}.quote-library-rank{display:block;color:#8290a5;font-size:10px;letter-spacing:.035em;margin-bottom:5px}.quote-library-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;font-size:12px;line-height:1.65;color:#356194;text-decoration:none}.quote-library-name:hover{text-decoration:underline}.quote-library-copy{white-space:nowrap;flex:none;min-height:34px!important;padding:7px 10px!important;border:1px solid #d0def0!important;border-radius:7px!important;background:#f5f9ff!important;color:#37669e!important;font-size:11px!important}.quote-library-copy:hover{background:#eaf2ff!important}.quote-library-copy-status{margin:7px 0 0;color:#63708a;font-size:11px;line-height:1.5;min-height:0}.quote-library-copy-status:empty{display:none}.quote-library-pager{display:flex;justify-content:space-between;align-items:center;gap:16px;color:#63708a;font-size:12px;margin:20px 0}.quote-library-pager>div{display:flex;align-items:center;gap:12px}.quote-library-pager button{border:1px solid #c9d5e5;border-radius:8px;background:white;color:#172033;padding:8px 13px;min-height:36px;font-size:12px;cursor:pointer}.quote-library-pager button:disabled{opacity:.4;cursor:default}.quote-library-empty{padding:44px 20px;border:1px dashed #d4deed;border-radius:14px;background:#fafcff;text-align:center;color:#63708a;font-size:14px}.workbench-quote-library input:focus-visible,.workbench-quote-library select:focus-visible,.workbench-quote-library button:focus-visible,.workbench-quote-library a:focus-visible{outline:3px solid #93b4ef;outline-offset:2px}.workbench-quote-library [hidden]{display:none!important}@media(max-width:760px){.quote-library-heading{padding:20px;align-items:flex-start;gap:14px}.quote-library-heading h2{font-size:21px}.quote-library-total{font-size:27px}.quote-library-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.quote-library-search-label{grid-column:1/-1}.quote-library-grid{grid-template-columns:1fr}.quote-library-card{padding:18px 17px 13px}}@media(max-width:430px){.quote-library-controls{grid-template-columns:1fr}.quote-library-heading{padding:17px}.quote-library-description{font-size:12px}.quote-library-pager{align-items:flex-start}}
+.workbench-quote-library{min-width:0}.quote-library-heading{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:23px 26px;margin-bottom:18px;border:1px solid #dce6f5;border-radius:16px;background:linear-gradient(115deg,#eef5ff 0%,#fff 76%)}.quote-library-eyebrow{font-size:11px;color:#4878b7;margin:0 0 9px;letter-spacing:.08em}.quote-library-heading h2{font-size:24px;margin:0 0 8px;color:#172b4b}.quote-library-description{font-size:13px;line-height:1.75;color:#63708a;margin:0;max-width:650px}.quote-library-total{flex:none;color:#2563eb;font-size:34px;font-variant-numeric:tabular-nums;font-weight:650;text-align:center}.quote-library-total small{display:block;font-size:11px;color:#7185a1;font-weight:400;margin-top:3px}.quote-library-controls{display:grid;grid-template-columns:1fr;gap:17px;padding:16px 18px;border:1px solid #dfe6f0;border-radius:14px;background:#fff}.quote-library-controls label{display:flex;flex-direction:column;gap:7px;font-size:12px;color:#63708a}.quote-library-controls input{width:100%;min-width:0;height:43px;padding:9px 12px;border:1px solid #c9d5e5;border-radius:8px;background:#fff;color:#172033;font-size:13px}.quote-library-filter-group{display:grid;grid-template-columns:84px minmax(0,1fr);gap:12px;align-items:start}.quote-library-filter-title{font-size:12px;color:#63708a;padding-top:9px;line-height:1.6}.quote-library-chips{display:flex;flex-wrap:wrap;gap:8px}.quote-library-chip{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:7px 10px;border:1px solid #dce5f0;border-radius:8px;background:#fff;color:#46566d;font-size:12px;line-height:1.5;cursor:pointer}.quote-library-chip:hover{border-color:var(--chip-color);background:color-mix(in srgb,var(--chip-color) 5%,white)}.quote-library-chip[aria-pressed="true"]{border-color:var(--chip-color);background:color-mix(in srgb,var(--chip-color) 10%,white);color:var(--chip-color);box-shadow:inset 0 0 0 1px var(--chip-color);font-weight:600}.quote-library-chip-dot{width:7px;height:7px;flex:none;border-radius:50%;background:var(--chip-color)}.quote-library-chip-count{min-width:19px;text-align:center;padding:0 5px;border-radius:5px;background:#f0f4f9;color:#6a7a92;font-size:11px;font-variant-numeric:tabular-nums}.quote-library-chip[aria-pressed="true"] .quote-library-chip-count{background:color-mix(in srgb,var(--chip-color) 14%,white);color:var(--chip-color)}.quote-library-count-note{font-size:11px;color:#8290a5;margin:0;text-align:right}.quote-library-result{font-size:12px;color:#63708a;margin:16px 3px}.quote-library-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch}.quote-library-card{min-width:0;display:flex;flex-direction:column;border:1px solid #dce5f0;border-top:3px solid var(--quote-accent);border-radius:13px;background:#fff;box-shadow:0 7px 20px rgba(34,64,112,.04);padding:20px 20px 15px}.quote-library-tags{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}.quote-library-tag{display:inline-flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:11px;line-height:1.6;padding:4px 8px;border-radius:6px;color:var(--quote-accent);background:color-mix(in srgb,var(--quote-accent) 8%,white);border:1px solid color-mix(in srgb,var(--quote-accent) 17%,white);overflow-wrap:anywhere}.quote-library-tag strong{font-weight:600}.quote-library-tag-separator{opacity:.45}.quote-library-card blockquote{flex:1;margin:0 0 20px;padding:0;border:0;color:#273a52;font-size:14px;line-height:1.95;white-space:pre-wrap;overflow-wrap:anywhere}.quote-library-card-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid #edf1f7;padding-top:13px}.quote-library-source{min-width:0}.quote-library-rank{display:block;color:#8290a5;font-size:10px;letter-spacing:.035em;margin-bottom:5px}.quote-library-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;font-size:12px;line-height:1.65;color:#356194;text-decoration:none}.quote-library-name:hover{text-decoration:underline}.quote-library-copy{white-space:nowrap;flex:none;min-height:34px!important;padding:7px 10px!important;border:1px solid #d0def0!important;border-radius:7px!important;background:#f5f9ff!important;color:#37669e!important;font-size:11px!important}.quote-library-copy:hover{background:#eaf2ff!important}.quote-library-copy-status{margin:7px 0 0;color:#63708a;font-size:11px;line-height:1.5;min-height:0}.quote-library-copy-status:empty{display:none}.quote-library-pager{display:flex;justify-content:space-between;align-items:center;gap:16px;color:#63708a;font-size:12px;margin:20px 0}.quote-library-pager>div{display:flex;align-items:center;gap:12px}.quote-library-pager button{border:1px solid #c9d5e5;border-radius:8px;background:white;color:#172033;padding:8px 13px;min-height:36px;font-size:12px;cursor:pointer}.quote-library-pager button:disabled{opacity:.4;cursor:default}.quote-library-empty{padding:44px 20px;border:1px dashed #d4deed;border-radius:14px;background:#fafcff;text-align:center;color:#63708a;font-size:14px}.workbench-quote-library input:focus-visible,.workbench-quote-library button:focus-visible,.workbench-quote-library a:focus-visible{outline:3px solid #93b4ef;outline-offset:2px}.workbench-quote-library [hidden]{display:none!important}@media(max-width:760px){.quote-library-heading{padding:20px;align-items:flex-start;gap:14px}.quote-library-heading h2{font-size:21px}.quote-library-total{font-size:27px}.quote-library-filter-group{grid-template-columns:1fr;gap:7px}.quote-library-filter-title{padding-top:0}.quote-library-count-note{text-align:left}.quote-library-grid{grid-template-columns:1fr}.quote-library-card{padding:18px 17px 13px}}@media(max-width:430px){.quote-library-controls{grid-template-columns:1fr}.quote-library-heading{padding:17px}.quote-library-description{font-size:12px}.quote-library-pager{align-items:flex-start}}
 """
 
 
@@ -118,8 +133,8 @@ SCRIPT = """
   document.querySelectorAll("[data-quote-library]").forEach(root => {
     const query = selector => root.querySelector(selector);
     const cards = Array.from(root.querySelectorAll("[data-library-card]"));
-    const primary = query("[data-library-primary-filter]");
-    const secondary = query("[data-library-secondary-filter]");
+    const primaryButtons = Array.from(root.querySelectorAll("[data-library-primary-filter]"));
+    const secondaryButtons = Array.from(root.querySelectorAll("[data-library-secondary-filter]"));
     const search = query("[data-library-search]");
     const normalize = value => String(value || "").normalize("NFKC").toLocaleLowerCase().trim();
     const entries = cards.map(card => ({card,
@@ -127,10 +142,24 @@ SCRIPT = """
       tags: Array.from(card.querySelectorAll("[data-library-primary]")).map(tag => ({primary:tag.dataset.libraryPrimary, secondary:tag.dataset.librarySecondary}))
     }));
     const pageSize = 12;
-    let page = 1;
+    let page = 1, selectedPrimary = "", selectedSecondary = "";
+    function updateChips() {
+      primaryButtons.forEach(button => button.setAttribute("aria-pressed", String(button.dataset.libraryPrimaryFilter === selectedPrimary)));
+      const primaryColor = primaryButtons.find(button => button.dataset.libraryPrimaryFilter === selectedPrimary)?.dataset.libraryChipColor;
+      secondaryButtons.forEach(button => {
+        const key = button.dataset.librarySecondaryFilter;
+        const count = entries.filter(entry => entry.tags.some(tag => (!selectedPrimary || tag.primary === selectedPrimary) && (!key || tag.secondary === key))).length;
+        button.hidden = Boolean(key) && count === 0;
+        button.disabled = button.hidden;
+        button.querySelector("[data-library-chip-count]").textContent = String(count);
+        button.setAttribute("aria-pressed", String(key === selectedSecondary));
+        button.setAttribute("aria-label", `${button.dataset.libraryChipLabel}，${count} 条片段`);
+        button.style.setProperty("--chip-color", selectedPrimary ? primaryColor : button.dataset.libraryChipColor);
+      });
+    }
     function update() {
       const term = normalize(search.value);
-      const matching = entries.filter(entry => (!term || entry.search.includes(term)) && entry.tags.some(tag => (!primary.value || tag.primary === primary.value) && (!secondary.value || tag.secondary === secondary.value)));
+      const matching = entries.filter(entry => (!term || entry.search.includes(term)) && entry.tags.some(tag => (!selectedPrimary || tag.primary === selectedPrimary) && (!selectedSecondary || tag.secondary === selectedSecondary)));
       const pageCount = Math.max(1, Math.ceil(matching.length / pageSize));
       page = Math.max(1, Math.min(page, pageCount));
       cards.forEach(card => {card.hidden = true;});
@@ -141,15 +170,16 @@ SCRIPT = """
       query('[data-library-page="next"]').disabled = page >= pageCount;
       query("[data-library-empty]").hidden = matching.length > 0 || cards.length === 0;
     }
-    primary.addEventListener("change", () => {
-      secondary.value = "";
-      secondary.querySelectorAll("[data-library-parents]").forEach(option => {
-        option.hidden = Boolean(primary.value) && !option.dataset.libraryParents.split(" ").includes(primary.value);
-        option.disabled = option.hidden;
-      });
-      page = 1; update();
-    });
-    secondary.addEventListener("change", () => {page = 1; update();});
+    primaryButtons.forEach(button => button.addEventListener("click", () => {
+      selectedPrimary = button.dataset.libraryPrimaryFilter;
+      selectedSecondary = "";
+      page = 1; updateChips(); update();
+    }));
+    secondaryButtons.forEach(button => button.addEventListener("click", () => {
+      if (button.disabled) return;
+      selectedSecondary = button.dataset.librarySecondaryFilter;
+      page = 1; updateChips(); update();
+    }));
     search.addEventListener("input", () => {page = 1; update();});
     query('[data-library-page="previous"]').addEventListener("click", () => {page -= 1; update();});
     query('[data-library-page="next"]').addEventListener("click", () => {page += 1; update();});
@@ -181,6 +211,7 @@ SCRIPT = """
     });
     query("[data-library-controls]").hidden = false;
     query("[data-library-pager]").hidden = false;
+    updateChips();
     update();
   });
 })();

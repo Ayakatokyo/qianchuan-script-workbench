@@ -95,6 +95,19 @@ class QuoteLibraryTests(unittest.TestCase):
         self.assertFalse(any(key.startswith('on') for e in doc.elements for key in e['attrs']))
         self.assertEqual(doc.find('blockquote')[0]['text'], attack)
 
+    def test_filter_chips_are_buttons_with_deduplicated_counts(self):
+        doc = Document(self.render())
+        self.assertFalse(doc.find('select'))
+        self.assertNotIn('hidden', doc.find('div', **{'data-library-controls': None})[0]['attrs'])
+        primary = [e for e in doc.find('button') if 'data-library-primary-filter' in e['attrs']]
+        secondary = [e for e in doc.find('button') if 'data-library-secondary-filter' in e['attrs']]
+        self.assertEqual(len(primary), 4)
+        self.assertEqual(len(secondary), 4)
+        self.assertEqual([e['attrs'].get('aria-label') for e in primary],
+                         ['全部，2 条片段', '价格优惠，1 条片段', '商品卖点，1 条片段', '未分类，1 条片段'])
+        self.assertEqual([e['attrs'].get('aria-pressed') for e in primary], ['true', 'false', 'false', 'false'])
+        self.assertTrue(all(e['attrs'].get('type') == 'button' for e in primary + secondary))
+
     def test_filters_search_paging_and_copy_feedback_execute_offline(self):
         node = shutil.which('node')
         if not node:
@@ -103,7 +116,9 @@ class QuoteLibraryTests(unittest.TestCase):
         quotes = [f'片段{index}。' for index in range(14)]
         item['script']['text'] = '\n'.join(quotes)
         item['script']['detail'] = {'21': {'label': '降价/折扣', 'list': quotes[:13]},
-                                    '22': {'label': '价格说明', 'list': [quotes[0], quotes[13]]}}
+                                    '22': {'label': '价格说明', 'list': [quotes[0]]},
+                                    '33': {'label': '价格说明', 'list': [quotes[13]]}}
+        item['script']['groups'][0]['children'].append({'id': 33, 'label': '价格说明'})
         doc = Document(self.render([item]))
         index = {id(element): position for position, element in enumerate(doc.elements)}
         nodes = [{'tag': element['tag'], 'attrs': element['attrs'], 'text': element['text'],
@@ -116,7 +131,8 @@ function matches(item, selector) {
   return matched && matched[1] in item.attrs && (matched[2] === undefined || item.attrs[matched[1]] === matched[2]);
 }
 const nodes = source.map((entry,index) => {
-  const item = {tagName:entry.tag.toUpperCase(), attrs:{...entry.attrs}, parent:entry.parent,index,hidden:"hidden" in entry.attrs,value:entry.attrs.value || "",dataset:{},style:{},events:{},textContent:entry.text,
+  const item = {tagName:entry.tag.toUpperCase(), attrs:{...entry.attrs}, parent:entry.parent,index,hidden:"hidden" in entry.attrs,value:entry.attrs.value || "",dataset:{},style:{setProperty(key,value){this[key]=value;}},events:{},textContent:entry.text,
+    setAttribute(key,value){this.attrs[key]=value;},
     addEventListener(key,fn){(this.events[key] ||= []).push(fn);},
     async emit(type){for(const fn of this.events[type] || []) await fn({preventDefault(){}});},
     querySelector(selector){return this.querySelectorAll(selector)[0];},
@@ -140,20 +156,27 @@ const check=(value,message)=>{if(!value)throw Error(message);};
 check(visible().length===12,"First page has 12");
 await get('[data-library-page="next"]').emit("click");
 check(visible().length===2,"Second page has two");
-const primary=get("[data-library-primary-filter]"),secondary=get("[data-library-secondary-filter]"),search=get("[data-library-search]");
+const primaries=root.querySelectorAll("[data-library-primary-filter]"),secondaries=root.querySelectorAll("[data-library-secondary-filter]"),search=get("[data-library-search]");
+const primary=key=>primaries.find(button=>button.dataset.libraryPrimaryFilter===key);
+const secondary=key=>secondaries.find(button=>button.dataset.librarySecondaryFilter===key);
+const chipCount=button=>Number(button.querySelector("[data-library-chip-count]").textContent);
 search.value="ｃａｆé";await search.emit("input");
 check(visible().length===12 && get("[data-library-page-label]").textContent==="1 / 2","Unicode search resets page");
 search.value="";await search.emit("input");
-primary.value="p0";await primary.emit("change");
-check(get("[data-library-result]").textContent.includes("13 条"),"Primary filters source mappings");
-const option=secondary.querySelectorAll("[data-library-parents]").find(option=>option.value==="s1");
-check(option.hidden && option.disabled,"Secondary choices depend on primary");
-secondary.value="s1";await secondary.emit("change");
-check(visible().length===0,"No cross-product matching between unrelated tag pairs");
-primary.value="p1";await primary.emit("change");
-check(visible().length===2 && secondary.value==="","Primary switch resets secondary selection");
+await primary("p0").emit("click");
+check(primary("p0").attrs["aria-pressed"]==="true" && primary("").attrs["aria-pressed"]==="false","Primary has a clear single selection");
+check(chipCount(secondary("s1"))===1,"Secondary counts use primary context and unique excerpts");
+await secondary("s1").emit("click");
+check(visible().length===1 && visible()[0].querySelector("[data-library-quote]").textContent==="片段13。","Secondary pair does not cross-match another primary on same quote");
+await primary("p1").emit("click");
+check(visible().length===1 && secondary("").attrs["aria-pressed"]==="true","Primary switch resets secondary selection");
+check(secondary("s0").hidden && secondary("s0").disabled,"Only available secondary labels are shown");
+await secondary("s0").emit("click");
+check(visible().length===1 && secondary("").attrs["aria-pressed"]==="true","Unavailable hidden button cannot activate");
+await primary("").emit("click");
+check(chipCount(secondary("s1"))===2 && !secondary("s0").hidden,"All primary restores secondary totals");
 search.value="片段13";await search.emit("input");
-check(visible().length===1 && visible()[0].querySelector("[data-library-quote]").textContent==="片段13。","Exact phrase search");
+check(visible().length===1 && chipCount(secondary("s1"))===2,"Search keeps counts stable and filters results");
 const card=visible()[0],button=card.querySelector("[data-library-copy]"),status=card.querySelector("[data-library-copy-status]");
 await button.emit("click");
 check(copied==="片段13。" && status.textContent.includes("已复制"),"Copy preserves exact quote");
