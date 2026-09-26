@@ -43,12 +43,6 @@ FORBIDDEN_PUBLIC_FIELDS = {
 }
 
 
-def _pre_input_lines(text: str) -> list[str]:
-    body = text.split("pre_input:", 1)[1].split("\n", 1)[1]
-    end = min((index for index in (body.find("\n---"), body.find("\nskill_form:")) if index >= 0), default=len(body))
-    return [line.strip() for line in body[:end].splitlines() if line.strip()]
-
-
 def live_request() -> AcquisitionRequest:
     return AcquisitionRequest.from_dict({
         "liveAcquire": {
@@ -165,13 +159,17 @@ class IntakeAndLiveContractTests(unittest.TestCase):
             self.assertTrue(set(key for key, _ in blocks).isdisjoint(FORBIDDEN_PUBLIC_FIELDS))
 
             skill_text = (root / "SKILL.md").read_text(encoding="utf-8")
-            self.assertEqual(_pre_input_lines(metadata_text), _pre_input_lines(skill_text), name)
+            frontmatter = skill_text.split("---", 2)[1]
+            self.assertIn("\ndescription: 适用于", frontmatter, name)
+            self.assertIn("\nargument_hint: ", frontmatter, name)
+            self.assertNotIn("pre_input:", frontmatter, name)
             references = [field for field in PUBLIC_FIELDS if f"__field:{field}__" in metadata_text]
             self.assertEqual(references, PUBLIC_FIELDS, name)
             for field in PUBLIC_FIELDS:
                 self.assertEqual(metadata_text.count(f"__field:{field}__"), 1, name)
             self.assertFalse(any(f"__field:{field}__" in metadata_text for field in FORBIDDEN_PUBLIC_FIELDS), name)
             self.assertIn("千川广告主ID：__field:rpa_shop__", metadata_text, name)
+            self.assertIn("例如筛选“整体消耗”>=10000，再按“视频播放数”降序", metadata_text, name)
             self.assertNotIn("（RPA 授权）", metadata_text, name)
             self.assertNotIn("广告主数字 ID 会从授权项自动核验", metadata_text, name)
 

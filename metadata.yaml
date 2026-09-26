@@ -22,14 +22,14 @@ market:
       prompt: "基于本轮已验证事实包，对比我指定素材的内容公式、脚本文本和指标，并为每条结论提供字段来源。"
     - title: 复用事实包生成或改写
       prompt: "复用本轮千川脚本事实包，依据客户确认资料生成新稿，或按我提供的原稿约束进行改写。"
-# 需与 SKILL.md frontmatter 的 metadata.pre_input 完全一致；__field 标记按 skill_form 渲染为表单控件。
+# pre_input 统一在此维护；__field 标记按 skill_form 渲染为表单控件。
 pre_input: |
   请采集千川素材脚本数据：
   千川授权店铺：__field:api_shop__（必填）
   千川广告主ID：__field:rpa_shop__（必填）
   时间范围：__field:date_range__（必填）
   脚本素材数：__field:top_n__（必填）
-  素材筛选与排序：__field:material_filter_sort__（可选）
+  素材筛选与排序：__field:material_filter_sort__（可选；例如筛选“整体消耗”>=10000，再按“视频播放数”降序；排序指标和排序方向均可留空）。
 skill_form:
   - key: api_shop
     type: api_shop

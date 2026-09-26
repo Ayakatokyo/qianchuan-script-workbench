@@ -1,15 +1,7 @@
 ---
 name: 千川素材脚本工作台
-description: Use when a user wants to acquire and review Qianchuan material scripts, analyze those scripts with a custom question, generate scripts from confirmed customer facts, or rewrite a supplied original.
-metadata:
-  argument_hint: 先选择千川授权店铺、RPA 授权账号、时间范围和详情素材数；取数报告完成后等待用户描述分析、生成或改写目标。
-  pre_input: |
-    请采集千川素材脚本数据：
-    千川授权店铺：__field:api_shop__（必填）
-    千川广告主ID：__field:rpa_shop__（必填）
-    时间范围：__field:date_range__（必填）
-    脚本素材数：__field:top_n__（必填）
-    素材筛选与排序：__field:material_filter_sort__（可选）
+description: 适用于采集和核对千川素材脚本，按用户自定义问题分析已验证脚本，或根据客户确认事实生成脚本、按原稿要求改写脚本。
+argument_hint: 先选择千川授权店铺、RPA 授权账号、时间范围和详情素材数；取数报告完成后等待用户描述分析、生成或改写目标。
 ---
 
 # 千川素材脚本工作台
