@@ -41,7 +41,7 @@ HTML 移除“完整性与缺口”页、顶部运行状态告示、榜单脚本
 
 ### 首批详情 CSV 熔断
 
-素材详情连接器 `rpa_rpa.conn.juliang.qc.material.analysis.video.live.diagnosis` 先固定首批最多 3 个素材并保存 `first-batch-csv-gate.json`；目标不足 3 个时以实际目标数为首批。必须收齐首批结果后才允许后续素材或身份错配重试。有效结果须实际落盘、解析为非空业务 CSV，并通过素材身份校验；只有成功状态、文件链接、JSON records、空表头、登录页或错误素材内容均不能放行。CSV 有效但脚本文本缺失或后续本地处理失败，不等于 CSV 无效。
+素材详情连接器 `rpa.conn.juliang.qc.material.analysis.video.live.diagnosis` 先固定首批最多 3 个素材并保存 `first-batch-csv-gate.json`；目标不足 3 个时以实际目标数为首批。必须收齐首批结果后才允许后续素材或身份错配重试。有效结果须实际落盘、解析为非空业务 CSV，并通过素材身份校验；只有成功状态、文件链接、JSON records、空表头、登录页或错误素材内容均不能放行。CSV 有效但脚本文本缺失或后续本地处理失败，不等于 CSV 无效。
 
 首批全部已确认且没有有效 CSV 时，门禁为 `blocked`，运行状态为 `rpaPaused`，错误码 `first_batch_no_valid_csv`。向使用者明确提示：“首批素材详情 RPA 未返回有效 CSV，当前入参可能有问题，已暂停后续所有 RPA。请检查授权账号、日期和素材定位参数，修正后使用新运行目录重新验证首批。” 不继续后续批次、补位或自动重试，也不宣称已取消远端在途任务。
 
@@ -90,3 +90,9 @@ python "$SKILL_ROOT/scripts/run.py" verify --path "$RUN_DIR/analysis/$ANALYSIS_I
 详情采集必须委托完整 `acquire/continue-acquire` 编排；独立实现时须交付同等首批 CSV 验证、持久暂停、请求前检查和授权/身份核验。每次执行读取连接器实时定义并验证实际业务参数，不写死上次 schema、platformCode 或账号关系，不循环低层单素材提交绕过门禁。阶段二仍只用当前已验证事实，不借分析入参改变取数范围。
 
 派生交付前做实际行为验收：更换两域账号、日期、TopN、筛选排序后，实际请求和落盘回执同步变化；北京时间 T-2 通过、T-1/今天/未来及反向日期拒绝且没有网络请求；首批全无有效 CSV 不提交下一批、部分有效且全体确认才继续、未知/中断/重启仍暂停；本地后处理错误不误判无 CSV。独立解包验证入口、运行模块、Schema、字段注册表和依赖齐全，测试保留在派生源码仓。旧派生包不会自动更新，须在其源仓升级、重建并验收。
+
+## 指标证据修复（2026-09-28）
+
+新采集的素材保存 `metricSourceRefs`，逐字段绑定完整报表快照 SHA-256、零基原始行号、素材 ID 和指标字段；`sourceRefs` 保留行级定位。构建和验证均核对真实值，不将缺值补零。旧 source pack 保持原字节：新建 `analysisId` 时，`prepare-analysis` 从该包已绑定、且与报表收据一致的完整快照派生字段引用，只写本次分析切片；`metricEvidencePolicy=verified_report_fields_v1` 标记此路径。发布及独立验证重新核对快照、字段值和来源；已有分析保持原验证语义，不覆盖旧报告或收据。
+
+没有绑定快照的历史导入沿用其原证据，不能凭空补来源。重复 ID 无法唯一定位、快照/行/值/引用冲突直接报错。`metric_value_missing` 表示值为空，`metric_source_missing` 表示有值但没有可用来源；准备命令返回逐指标 `metricCoverage`。表现分组也需要引用指标证据，不能仅引用脚本文字支撑高低表现分类。

@@ -3,10 +3,68 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from copy import deepcopy
 import hashlib
+import json
+from pathlib import Path
 import re
 import unicodedata
 from typing import Any, Mapping
+
+
+def bind_report_metric_sources(pack: Mapping[str, Any], run_dir: Path) -> dict[str, Any]:
+    """Derive field evidence from the immutable report, never mutate an old pack."""
+    result = deepcopy(dict(pack))
+    selection = pack.get("selection") or {}
+    relative = selection.get("reportSnapshotPath")
+    if not relative:
+        return result  # Historical imports without a report retain their own evidence.
+    root = Path(run_dir).resolve()
+    path = (root / relative).resolve()
+    if relative != "source-data/material-report-snapshot.json" or not path.is_relative_to(root):
+        raise ValueError("metric source snapshot path is invalid")
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    receipt = json.loads((root / "report-query-receipt.json").read_text(encoding="utf-8"))
+    snapshot = json.loads(raw)
+    rows = snapshot.get("rows")
+    if (digest != selection.get("reportSnapshotSha256")
+            or digest != receipt.get("snapshotSha256")
+            or receipt.get("runId") != pack.get("runId")
+            or receipt.get("snapshotPath") != relative or receipt.get("status") != "completed"
+            or snapshot.get("complete") is not True or not isinstance(rows, list)):
+        raise ValueError("metric source snapshot hash or identity mismatch")
+    rows_hash = hashlib.sha256(json.dumps(rows, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if (snapshot.get("rowsSha256") != rows_hash or receipt.get("rowsSha256") != rows_hash
+            or snapshot.get("recordCount") != len(rows) or receipt.get("recordCount") != len(rows)
+            or any(snapshot.get(key) != receipt.get(key) for key in ("queryFingerprint", "scopeFingerprint"))):
+        raise ValueError("metric source snapshot rows failed verification")
+    from qianchuan_script_acquisition_field_registry import MaterialCandidate, load_field_registry, _value_at
+    registry = load_field_registry(Path(__file__).resolve().parents[1] / "config/asset-field-registry-v1.json")
+    by_id: dict[str, list] = {}
+    for index, row in enumerate(rows):
+        if not isinstance(row, Mapping) or not _value_at(row, registry.require("material_id")):
+            continue  # Non-addressable report rows are retained, but never evidence.
+        candidate = MaterialCandidate.from_row(row, index + 1, registry)
+        by_id.setdefault(candidate.material_id, []).append((index, candidate))
+    for material in result["materials"]:
+        matches = by_id.get(material["materialId"], [])
+        if len(matches) != 1:
+            raise ValueError("metric source material row missing or ambiguous: " + material["materialId"])
+        index, candidate = matches[0]
+        prefix = f"{relative}#sha256={digest}&row={index}&materialId={material['materialId']}"
+        sources = {}
+        for field, value in material["metrics"].items():
+            if value is None:
+                continue
+            if field not in candidate.metrics or str(value) != str(candidate.metrics[field]):
+                raise ValueError("metric source value mismatch: " + material["materialId"] + "/" + field)
+            sources[field] = [prefix + "&field=" + field]
+        if material.get("metricSourceRefs") is not None and material["metricSourceRefs"] != sources:
+            raise ValueError("metric source references mismatch")
+        material["metricSourceRefs"] = sources
+        material["sourceRefs"] = [prefix]
+    return result
 
 
 def normalize_text(value: str) -> str:

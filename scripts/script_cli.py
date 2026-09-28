@@ -837,7 +837,14 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
             or selection_audit["reportRowCount"] != snapshot["recordCount"]
         ):
             raise CliError("report_snapshot_mismatch", "report or selection evidence differs")
-        from qianchuan_script_acquisition_fact_pack import normalize_text
+        from qianchuan_script_acquisition_fact_pack import normalize_text, bind_report_metric_sources
+        if any("metricSourceRefs" in material for material in pack["materials"]):
+            try:
+                bound = bind_report_metric_sources(pack, path)
+            except (ValueError, OSError) as exc:
+                raise CliError("metric_source_invalid", str(exc)) from exc
+            if bound["materials"] != pack["materials"]:
+                raise CliError("metric_source_invalid", "material metric evidence differs from the report")
         counts = {"requested": len(pack["materials"]), "available": 0, "missing": 0, "failed": 0}
         content_counts = {key: {"available": 0, "missing": 0} for key in ("formulaLabels", "detailLabels", "structuredData", "transcript")}
         material_ids = [item["materialId"] for item in pack["materials"]]

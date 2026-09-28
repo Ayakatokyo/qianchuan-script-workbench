@@ -60,3 +60,9 @@ HTML 不再展示“完整性与缺口”页，以及顶部部分失败、等待
 已有 Markdown 运行只追加 HTML 与回执字段，原 summary-data.json、report.md 和 analysis-handoff.json 保持原字节（旧分析可能绑定其哈希）。这类运行的 HTML 从当前已验证事实重新投影业务展示，完整结构字段保留在底层事实中，旧结构数据仍保留原格式。重复调用复用已通过哈希检查的产物；内容遭篡改时拒绝覆盖。渲染失败时不把采集状态降成失败或伪造成功交接；可修复文件系统问题后用 render-summary 离线恢复，不触发报表/RPA/模型。
 
 报告展示扩展：`leaderboard.scope=fullReport` 时，`materials` 来自已校验快照的全部报表行，`metricDefinitions` 只描述实际返回指标，`sourceRef` 保存快照路径/SHA；旧导入缺少完整报表收据时使用 `scope=selectedMaterials`。这与顶层 `materials`（脚本选材）相互独立。新增字段为可选以兼容旧summary和分析哈希绑定，既有报告不自动覆盖。`config/report-metric-labels.json` 为报告专用名称目录；整体千次展现费用直接展示 `total_ecpm_for_roi2` 原值，不在页面重算。素材筛选条件移除“筛选条件与排序字段”区，选材事实仍保存。
+
+## 指标证据修复（2026-09-28）
+
+新采集的素材保存 `metricSourceRefs`，逐字段绑定完整报表快照 SHA-256、零基原始行号、素材 ID 和指标字段；`sourceRefs` 保留行级定位。构建和验证均核对真实值，不将缺值补零。旧 source pack 保持原字节：新建 `analysisId` 时，`prepare-analysis` 从该包已绑定、且与报表收据一致的完整快照派生字段引用，只写本次分析切片；`metricEvidencePolicy=verified_report_fields_v1` 标记此路径。发布及独立验证重新核对快照、字段值和来源；已有分析保持原验证语义，不覆盖旧报告或收据。
+
+没有绑定快照的历史导入沿用其原证据，不能凭空补来源。重复 ID 无法唯一定位、快照/行/值/引用冲突直接报错。`metric_value_missing` 表示值为空，`metric_source_missing` 表示有值但没有可用来源；准备命令返回逐指标 `metricCoverage`。表现分组也需要引用指标证据，不能仅引用脚本文字支撑高低表现分类。

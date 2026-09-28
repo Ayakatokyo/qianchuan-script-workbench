@@ -185,6 +185,16 @@
                 }
               ]
             }
+          },
+          "metricSourceRefs": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
           }
         }
       }

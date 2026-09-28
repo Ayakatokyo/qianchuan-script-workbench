@@ -53,3 +53,9 @@ python "$SKILL_ROOT/scripts/run.py" verify --path "$RUN_DIR/analysis/$ANALYSIS_I
 ## 身份错配恢复配置
 
 内部实时输入 `liveAcquire.identityRetryLimit` 是额外重试上限，整数 0–3，默认 2（最多 3 次提交）；显式 3 时最多 4 次。布尔值、小数和超界值拒绝。此项不改变五项业务表单、报表口径或第二阶段输入。仅已结束的身份错配可重试，发生错配后先收齐在途任务，再串行执行余下队列；首批暂停或任务状态未知均阻断重试。
+
+## 指标证据修复（2026-09-28）
+
+新采集的素材保存 `metricSourceRefs`，逐字段绑定完整报表快照 SHA-256、零基原始行号、素材 ID 和指标字段；`sourceRefs` 保留行级定位。构建和验证均核对真实值，不将缺值补零。旧 source pack 保持原字节：新建 `analysisId` 时，`prepare-analysis` 从该包已绑定、且与报表收据一致的完整快照派生字段引用，只写本次分析切片；`metricEvidencePolicy=verified_report_fields_v1` 标记此路径。发布及独立验证重新核对快照、字段值和来源；已有分析保持原验证语义，不覆盖旧报告或收据。
+
+没有绑定快照的历史导入沿用其原证据，不能凭空补来源。重复 ID 无法唯一定位、快照/行/值/引用冲突直接报错。`metric_value_missing` 表示值为空，`metric_source_missing` 表示有值但没有可用来源；准备命令返回逐指标 `metricCoverage`。表现分组也需要引用指标证据，不能仅引用脚本文字支撑高低表现分类。

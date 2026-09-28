@@ -991,6 +991,8 @@ def acquire_scripts(
     }
     write_status(output_dir, "sourcePackBuilding")
     pack = build_source_pack(selected_materials, script_facts, request.period, source_selection, ["material-report", "rpa-diagnosis", OUTCOMES_FILENAME, REPORT_SNAPSHOT_PATH, SELECTION_FILENAME])
+    from qianchuan_script_acquisition_fact_pack import bind_report_metric_sources
+    pack = bind_report_metric_sources(pack, output_dir)
     atomic_json(result_path, pack)
 
     failed_or_unsafe = any(item["state"] in {"failed", "submissionUnknown", "unsubmitted"} for item in outcomes)
