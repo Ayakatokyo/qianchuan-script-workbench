@@ -4,6 +4,8 @@
 
 成功取数保留 `facts/qianchuan-script-source-pack.json`、`acquisition-receipt.json`、报表快照和逐素材来源。脚本文本、公式、detail 与 data 分开保存；重复正文只用于内容去重，素材排名、指标和来源仍逐素材保留。旧 text-only source pack 按公式等结构字段缺失处理。
 
+`material-selection.json` 保留完整报表行数、用户筛选匹配数、可选行数和 `excludedRows`。AIGC 聚合行记为 `aigc_aggregate`，无可定位 ID 的行记为 `material_id_unavailable`；两者不进入 TopN 或详情 RPA，仍可在完整报表榜单查看。`selectedCount` 与详情请求数仅计算实际可选素材；若不足 TopN，按实际数量交付并在审计中保留原因。真正发起采集后失败的素材仍按失败与缺口披露。
+
 实时 `acquire/continue-acquire` 完成后自动校验并写报告；`render-summary` 保留离线恢复/历史运行入口。输出：
 
 | 文件 | Schema / 含义 |

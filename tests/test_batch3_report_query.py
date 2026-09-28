@@ -198,6 +198,35 @@ class Batch3ReportQueryTests(unittest.TestCase):
             "fieldId": "stat_cost_for_roi2",
         }])
 
+    def test_aigc_aggregate_does_not_consume_top_n_or_reach_detail_collection(self):
+        def report_row(material_id, display_id, video_type, cost):
+            return {
+                "dimensions": {
+                    "material_id": {"Value": material_id, "ValueStr": display_id},
+                    "roi2_material_video_type": {"Value": video_type[0], "ValueStr": video_type[1]},
+                },
+                "metrics": {"stat_cost_for_roi2": {"Value": cost, "ValueStr": str(cost)}},
+            }
+
+        rows = [
+            report_row("101", "101", ("1", "自选投放视频"), 100),
+            report_row("-2", "-", ("4", "AIGC动态创意"), 90),
+            report_row("102", "102", ("4", "AIGC动态创意"), 80),
+            report_row("103", "-", ("1", "自选投放视频"), 70),
+            report_row("104", "104", ("2", "智能优选视频"), 60),
+            report_row("105", "105", ("1", "自选投放视频"), 50),
+        ]
+        selection = select_materials_with_audit(
+            rows, live_request(topN=3, sort={"sortField": "整体消耗", "direction": "desc"}), self.registry
+        )
+        self.assertEqual([item.material_id for item in selection.candidates], ["101", "104", "105"])
+        self.assertEqual(selection.rankable_row_count, 3)
+        self.assertEqual(selection.to_dict()["excludedRows"], [
+            {"rowNumber": 2, "reason": "aigc_aggregate", "fieldId": "material_id", "materialId": "-2"},
+            {"rowNumber": 3, "reason": "aigc_aggregate", "fieldId": "material_id", "materialId": "102"},
+            {"rowNumber": 4, "reason": "material_id_unavailable", "fieldId": "material_id", "materialId": "103"},
+        ])
+
     def test_zero_metric_value_is_not_replaced_by_display_placeholder(self):
         zero_row = {
             "materialId": "m-zero",

@@ -12,6 +12,8 @@
 | `top_n` | `liveAcquire.topN` | 正整数，默认 10；只控制本地选材数量，不截断完整报表 |
 | `material_filter_sort` | `liveAcquire.materialFilterSort` | 可选，归一化为已注册字段的排序与 filters；仅作用于完整报表后的本地选材 |
 
+完整快照保留平台返回的所有报表行。本地筛选后、取 TopN 前，将 `roi2_material_video_type.Value=4` 或类型展示含 AIGC 的聚合行排除；平台结构化 `material_id` 非正数字、展示值 `-` 以及负数哨兵 ID 也不可作为详情 RPA 目标。排除原因与原行号写入 `material-selection.json.excludedRows`；有效候选按原排序补足 TopN，普通智能优选视频不因类型被排除。过滤不改用户条件、报表 API 请求或全量榜单。
+
 实时日期由 `scripts/date_policy.py::validate_period` 在网络请求前验证；单独复用入口为 `python "$SKILL_ROOT/scripts/date_policy.py" --start-date YYYY-MM-DD --end-date YYYY-MM-DD`，非零退出必须阻断后续请求。非法值不会被自动修正。离线 `verifiedRun` 导入只验证历史周期格式和顺序，不套用实时可用日。
 
 派生 Skill 必须同步首批 CSV 门禁及恢复行为，不能把 `rpaPaused` 当可继续的 `partialFailed`。暂停后先核实旧任务并检查参数；修正后用新的运行目录验证首批。第二阶段分析、生成、改写的业务入参保持与采集入参分开。

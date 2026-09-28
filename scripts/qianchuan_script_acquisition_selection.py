@@ -99,6 +99,30 @@ def _filter_result(query: MaterialQuery, row: Mapping[str, Any]) -> tuple[bool, 
     return True, None, None
 
 
+def _unselectable_material_reason(row: Mapping[str, Any], material_id: str) -> str | None:
+    # Report aggregate rows are facts for the full leaderboard, not detail-RPA targets.
+    dimensions = row.get("dimensions")
+    if isinstance(dimensions, Mapping):
+        video_type = dimensions.get("roi2_material_video_type")
+        if isinstance(video_type, Mapping):
+            is_aigc = str(video_type.get("Value") or "") == "4"
+            is_aigc |= "aigc" in str(video_type.get("ValueStr") or "").lower()
+            if is_aigc:
+                return "aigc_aggregate"
+        elif "aigc" in str(video_type or "").lower():
+            return "aigc_aggregate"
+
+        raw_id = dimensions.get("material_id")
+        if isinstance(raw_id, Mapping):
+            display_id = str(raw_id.get("ValueStr") or "").strip()
+            if display_id == "-" or not re.fullmatch(r"[0-9]+", material_id) or int(material_id) == 0:
+                return "material_id_unavailable"
+
+    if not material_id or re.fullmatch(r"-[0-9]+", material_id):
+        return "material_id_unavailable"
+    return None
+
+
 def select_materials_with_audit(
     rows: list[dict[str, Any]],
     request: AcquisitionRequest,
@@ -126,6 +150,13 @@ def select_materials_with_audit(
 
         matching_row_count += 1
         material_id = str(_value_at(row, material_entry) or "").strip()
+        unselectable_reason = _unselectable_material_reason(row, material_id)
+        if unselectable_reason:
+            exclusion = {"rowNumber": row_number, "reason": unselectable_reason, "fieldId": material_entry["id"]}
+            if material_id:
+                exclusion["materialId"] = material_id
+            exclusions.append(exclusion)
+            continue
         raw_sort_value = query.value(row, query.sort_entry)
         if _missing(raw_sort_value):
             exclusion = {
@@ -148,9 +179,6 @@ def select_materials_with_audit(
             if material_id:
                 exclusion["materialId"] = material_id
             exclusions.append(exclusion)
-            continue
-        if not material_id:
-            exclusions.append({"rowNumber": row_number, "reason": "material_id_unavailable", "fieldId": material_entry["id"]})
             continue
         ranked.append((sort_value, material_id, row))
 

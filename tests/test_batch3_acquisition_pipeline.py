@@ -188,6 +188,25 @@ class Batch3AcquisitionPipelineTests(unittest.TestCase):
             with self.assertRaisesRegex(CliError, "hash"):
                 _verify(Namespace(path=output))
 
+    def test_aigc_sentinel_is_audited_without_detail_rpa_submission(self):
+        candidates = [
+            {"materialId": "101", "materialName": "name-101", "metrics": {"综合成本": "100"}},
+            {"materialId": "-2", "materialName": "AIGC动态创意视频素材集合", "metrics": {"综合成本": "90"}},
+            {"materialId": "102", "materialName": "name-102", "metrics": {"综合成本": "80"}},
+            {"materialId": "103", "materialName": "name-103", "metrics": {"综合成本": "70"}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            rpa = RecordingRpaGateway({mid: "completed" for mid in ("101", "102", "103")})
+            acquire_scripts(live_request(3), output, RecordingReportGateway(candidates), rpa)
+            selection = json.loads((output / "material-selection.json").read_text(encoding="utf-8"))
+            self.assertEqual(selection["selectedMaterialIds"], ["101", "102", "103"])
+            self.assertEqual(selection["excludedRows"], [
+                {"rowNumber": 2, "reason": "material_id_unavailable", "fieldId": "material_id", "materialId": "-2"}
+            ])
+            self.assertEqual(rpa.submitted_material_ids, ["101", "102", "103"])
+            self.assertEqual(json.loads((output / "status.json").read_text(encoding="utf-8"))["state"], "ready")
+
     def test_formula_fields_are_separate_and_missing_content_is_explicit(self):
         infos = {
             "m1": {"formula": {"labels": ["痛点", "解决方案"]}, "detail": {"labels": ["特写"]}, "data": [{"key": "value"}], "text": "完整口播正文"},

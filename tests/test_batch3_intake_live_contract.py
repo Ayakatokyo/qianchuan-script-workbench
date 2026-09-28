@@ -205,8 +205,8 @@ class IntakeAndLiveContractTests(unittest.TestCase):
 
     def test_actual_report_rows_can_be_selected_by_registered_metric(self):
         registry = load_field_registry(ROOT / "config" / "asset-field-registry-v1.json")
-        selected = select_materials([report_record("m-1"), report_record("m-2")], live_request(), registry)
-        self.assertEqual([item.material_id for item in selected], ["m-2", "m-1"])
+        selected = select_materials([report_record("101"), report_record("102")], live_request(), registry)
+        self.assertEqual([item.material_id for item in selected], ["102", "101"])
 
     def test_dynamic_rpa_uses_detail_authorization_async_tasks_and_single_submit(self):
         transport = DynamicContractTransport()
