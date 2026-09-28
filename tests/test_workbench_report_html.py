@@ -98,6 +98,26 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         self.assertIn("元", doc.find("thead")[0]["text"])
         self.assertIn("2026-09-01", doc.find("body")[0]["text"])
 
+    def test_leaderboard_defaults_use_available_meta_metric_columns_in_meta_order(self):
+        summary = example()
+        summary["leaderboard"] = {
+            "materials": [{"materialId": "m1", "materialName": "素材一", "metrics": {
+                "stat_cost_for_roi2": 9,
+                "total_order_settle_amount_for_roi2_1h": 3,
+                "stat_cost_for_overall_roi2": 7,
+                "total_prepay_and_pay_settle_roi2_1h": 2,
+            }}],
+            "metricDefinitions": {key: {"label": key, "group": "整体指标"} for key in (
+                "stat_cost_for_roi2", "total_order_settle_amount_for_roi2_1h",
+                "stat_cost_for_overall_roi2", "total_prepay_and_pay_settle_roi2_1h")},
+        }
+        doc = Document(self.render(summary))
+        expected = ["stat_cost_for_overall_roi2", "total_prepay_and_pay_settle_roi2_1h",
+                    "total_order_settle_amount_for_roi2_1h"]
+        self.assertEqual([item["attrs"]["data-column"] for item in doc.find("th") if "data-column" in item["attrs"]], expected)
+        self.assertEqual(json.loads(doc.find("dialog")[0]["attrs"]["data-default-selection"]), expected)
+        self.assertEqual(len(doc.find("a", **{"data-section": "quote-library"})), 1)
+
     def test_single_delivery_matches_meta_defaults_and_current_material_fields(self):
         from workbench_metric_picker import SINGLE_DEFAULT_IDS
         summary = example()

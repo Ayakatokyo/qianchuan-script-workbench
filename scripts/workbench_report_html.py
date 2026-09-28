@@ -166,6 +166,11 @@ _STYLE = """
 .metric-card span{font-size:14px}
 .metric-card strong{font-size:24px;margin-top:8px}
 @media(max-width:760px){.metric-grid{grid-template-columns:1fr}}
+.filter-config-column h3{margin:0 0 6px;font-size:16px}.filter-config-note{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.6}
+.single-material-main{padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 24px rgba(34,64,112,.05)}
+.single-material-main .material-card{padding:0;border:0;box-shadow:none}.single-material-main .single-block{scroll-margin-top:74px;padding:16px 0 22px;margin:0;border-top:0;border-bottom:1px solid var(--line)}
+.single-material-main .single-block:last-child{border-bottom:0}.single-material-selector{top:16px;max-height:calc(100vh - 32px)}
+@media(max-width:760px){.single-material-main{padding:16px}.single-material-selector{max-height:320px}}
 """
 
 _SCRIPT = """
@@ -293,10 +298,10 @@ def render_html(summary: Mapping[str, Any]) -> str:
     for key, label in [('filters', '素材筛选条件'), ('materials', '素材榜单'), ('scripts', '脚本内容公式'), ('single-material', '单素材脚本'), ('quote-library', '脚本片段库')]:
         parts.append(f'<a href="#{key}-panel" data-section="{key}">{label}</a>')
     parts.append('</nav><noscript><p class="quality-alert">浏览器未启用 JavaScript，已展开全部报告分区与素材，仍可阅读全部报告内容。</p></noscript>')
-    parts.append('<section id="filters-panel" class="panel" data-section-panel="filters"><h2>素材筛选条件</h2><div class="filter-config-layout"><div class="filter-config-column"><h3>取数范围</h3><dl class="context">')
+    parts.append('<section id="filters-panel" class="panel" data-section-panel="filters"><h2>素材筛选条件</h2><div class="filter-config-layout"><div class="filter-config-column"><h3>素材列表筛选条件</h3><p class="filter-config-note">仅展示本次实际取数的范围。</p><dl class="context">')
     for label, value in [('开始日期', period.get('startDate')), ('结束日期', period.get('endDate')), ('完整报表行数', counts.get('reportRows')), ('入选素材数', counts.get('selectedMaterials'))]:
         parts.append(f'<div><dt>{label}</dt><dd>{_e(value)}</dd></div>')
-    parts.append('</dl></div><div class="filter-config-column"><h3>素材选取</h3><dl class="context">')
+    parts.append('</dl></div><div class="filter-config-column"><h3>脚本素材选取</h3><p class="filter-config-note">仅展示本次实际影响脚本素材入选与排序的条件。</p><dl class="context">')
     direction = {'asc': '升序', 'desc': '降序'}.get(selection.get('direction'), selection.get('direction'))
     for label, value in [('排序指标', ranking.get('label') or selection.get('rankingLabel') or selection.get('rankingField')), ('排序方向', direction), ('详情素材数 TopN', selection.get('topN')), ('指标单位', ranking.get('unit'))]:
         parts.append(f'<div><dt>{label}</dt><dd>{_e(value)}</dd></div>')
