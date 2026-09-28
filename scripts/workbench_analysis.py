@@ -12,6 +12,7 @@ from qianchuan_script_acquisition_receipt import atomic_json
 from script_creation_contracts import validate_payload
 from workbench_reporting import WorkbenchError, verify_handoff
 from qianchuan_script_acquisition_fact_pack import bind_report_metric_sources
+from analysis_delivery import prepare_pages, read_page, verify_pages, render_delivery, verify_delivery, timed_phase
 
 
 _IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -212,6 +213,7 @@ def _verify_metric_evidence(run_dir: Path, pack: dict, plan: dict, fact_slice: d
         raise WorkbenchError("metric_source_invalid", "analysis evidence differs from verified report fields")
 
 
+@timed_phase("prepare_analysis")
 def prepare_analysis(run_dir: Path, plan_path: Path, *, allow_partial: bool = False) -> dict[str, Any]:
     run_dir = Path(run_dir).expanduser().resolve()
     handoff, pack, pack_path = verify_handoff(run_dir)
@@ -301,12 +303,18 @@ def prepare_analysis(run_dir: Path, plan_path: Path, *, allow_partial: bool = Fa
     }
     validate_payload(receipt, "workbench-analysis-receipt.schema.json")
     atomic_json(receipt_path, receipt)
+    template = {"schemaVersion": 1, "runId": run_dir.name, "analysisId": analysis_dir.name, "operation": "analysis",
+                **{key: input_hashes[key] for key in ("sourcePackSha256", "planSha256", "modelInputSha256")},
+                "conclusions": [{"claim": "", "classification": "textObservation", "evidenceRefs": []}],
+                "limitations": [f"{g['materialId']} / {g['field']}: {g['reason']}" for g in fact_slice["gaps"]]}
+    prepare_pages(analysis_dir, {"runId": run_dir.name, "analysisId": analysis_dir.name}, fact_slice["materials"],
+                  ["validated-plan.json", "facts-slice.json", "model-input.json"], template, fact_slice["gaps"])
     metric_coverage = {
         field: {"available": sum(bool(item["metrics"][field]["available"]) for item in fact_slice["materials"]),
                 "selected": len(fact_slice["materials"])}
         for field in plan["metricFields"]
     }
-    return {"status": "awaitingModel", "operation": "analysis", "runId": run_dir.name, "analysisId": plan["analysisId"], "outputPath": str(analysis_dir), "modelInputPath": str(input_path), "promptPath": str(prompt_path), "metricCoverage": metric_coverage, "gaps": fact_slice["gaps"]}
+    return {"status": "awaitingModel", "operation": "analysis", "runId": run_dir.name, "analysisId": plan["analysisId"], "outputPath": str(analysis_dir), "modelInputPath": str(input_path), "promptPath": str(prompt_path), "handoffIndexPath": str(analysis_dir / "handoff-index.json"), "resultTemplatePath": str(analysis_dir / "result-template.json"), "metricCoverage": metric_coverage, "gaps": fact_slice["gaps"]}
 
 
 def _validate_result_evidence(result: Mapping[str, Any], fact_slice: Mapping[str, Any]) -> None:
@@ -357,6 +365,7 @@ def _render_analysis_report(result: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
+@timed_phase("publish_analysis")
 def publish_analysis(analysis_dir: Path, result_path: Path) -> dict[str, Any]:
     analysis_dir = Path(analysis_dir).expanduser().resolve()
     run_dir = analysis_dir.parent.parent.resolve()
@@ -414,7 +423,48 @@ def publish_analysis(analysis_dir: Path, result_path: Path) -> dict[str, Any]:
     completed_status = {**status, "state": "completed", "resultSha256": _sha256(analysis_dir / "analysis-result.json"), "reportSha256": _sha256(analysis_dir / "report.md")}
     validate_payload(completed_status, "workbench-operation-status.schema.json")
     atomic_json(status_path, completed_status)
-    return {"status": "completed", "operation": "analysis", "runId": run_dir.name, "analysisId": analysis_dir.name, "outputPath": str(analysis_dir / "analysis-result.json")}
+    delivery = render_analysis_delivery(analysis_dir)
+    return {**delivery, "operation": "analysis", "runId": run_dir.name, "analysisId": analysis_dir.name, "outputPath": str(analysis_dir / "analysis-result.json")}
+
+
+@timed_phase("render_analysis_report")
+def render_analysis_delivery(analysis_dir: Path) -> dict[str, Any]:
+    root = Path(analysis_dir).resolve()
+    verify_analysis(root)
+    if _read_json(root / "status.json")["state"] != "completed":
+        raise WorkbenchError("analysis_not_completed", "publish a validated result before rendering")
+    result = _read_json(root / "analysis-result.json")
+    materials = {m["materialId"]: m for m in _read_json(root / "facts-slice.json")["materials"]}
+    labels = {"platformFact": "平台事实", "textObservation": "文本观察", "modelInference": "模型推断", "suggestion": "待验证建议"}
+    cards = []
+    for conclusion in result["conclusions"]:
+        evidence = []
+        for ref in conclusion["evidenceRefs"]:
+            material = materials[ref["materialId"]]
+            field = ref.get("fieldId") if ref["field"] == "metric" else ref["field"]
+            entry = material["metrics" if ref["field"] == "metric" else "scriptFields"][field]
+            evidence.append({"material": material.get("materialName") or ref["materialId"], "field": entry.get("label") or {"text": "脚本正文", "formula": "内容公式", "detail": "脚本详情", "data": "结构数据"}.get(field, field),
+                             "value": entry.get("value"), "isMetric": ref["field"] == "metric", "sourceRefs": ref["sourceRefs"]})
+        cards.append({"claim": conclusion["claim"], "type": labels.get(conclusion["classification"], conclusion["classification"]), "evidence": evidence})
+    return render_delivery(root, "千川脚本分析", {"runId": result["runId"], "analysisId": root.name}, cards,
+                           result["limitations"] + [_NON_CAUSAL_BOUNDARY], ["analysis-result.json", "facts-slice.json", "receipt.json"])
+
+
+def analysis_delivery_status(analysis_dir: Path) -> dict[str, Any]:
+    root = Path(analysis_dir).resolve()
+    verify_analysis(root)
+    status = _read_json(root / "status.json")
+    index = verify_pages(root) if (root / "handoff-index.json").exists() else None
+    report = verify_delivery(root) if (root / "analysis-report/receipt.json").exists() else None
+    return {"status": status["state"], "analysisId": root.name, "verification": "passed",
+            "handoff": "verified" if index else "legacy_not_generated", "pageCount": len(index["pages"]) if index else None,
+            "deliveryStatus": "completed" if report else "not_generated", "reportVerified": bool(report),
+            "nextAction": "read_analysis_pages" if status["state"] == "awaitingModel" else ("deliver_report" if report else "render-analysis-report")}
+
+
+def verified_analysis_page(analysis_dir: Path, page: int) -> dict[str, Any]:
+    verify_analysis(Path(analysis_dir))
+    return read_page(analysis_dir, page)
 
 
 def verify_analysis(analysis_dir: Path) -> list[str]:

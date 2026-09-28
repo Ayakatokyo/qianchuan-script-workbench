@@ -264,6 +264,10 @@
     {
       "source": "scripts/workbench_metric_picker.py",
       "destination": "scripts/workbench_metric_picker.py"
+    },
+    {
+      "source": "scripts/analysis_delivery.py",
+      "destination": "scripts/analysis_delivery.py"
     }
   ],
   "entrypoint": "scripts/run.py"

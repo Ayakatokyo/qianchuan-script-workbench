@@ -66,3 +66,19 @@ HTML 不再展示“完整性与缺口”页，以及顶部部分失败、等待
 新采集的素材保存 `metricSourceRefs`，逐字段绑定完整报表快照 SHA-256、零基原始行号、素材 ID 和指标字段；`sourceRefs` 保留行级定位。构建和验证均核对真实值，不将缺值补零。旧 source pack 保持原字节：新建 `analysisId` 时，`prepare-analysis` 从该包已绑定、且与报表收据一致的完整快照派生字段引用，只写本次分析切片；`metricEvidencePolicy=verified_report_fields_v1` 标记此路径。发布及独立验证重新核对快照、字段值和来源；已有分析保持原验证语义，不覆盖旧报告或收据。
 
 没有绑定快照的历史导入沿用其原证据，不能凭空补来源。重复 ID 无法唯一定位、快照/行/值/引用冲突直接报错。`metric_value_missing` 表示值为空，`metric_source_missing` 表示有值但没有可用来源；准备命令返回逐指标 `metricCoverage`。表现分组也需要引用指标证据，不能仅引用脚本文字支撑高低表现分类。
+
+## 第二优先级：稳定分析交接与正式交付
+
+分析准备完成后，先读返回的 `handoff-index.json`：其中列出全部事实页、输入 SHA-256、记录数量、缺口和结果模板。每页最多五条完整记录，保留全文与来源；不得自行截断正文或重排云图原始 fact_ref 下标。按问题选择的完整范围读完所需分页后，将 `result-template.json` **复制到另一个结果文件**，填写结论及证据；空白模板不能提交为完成结果。事实页、索引和模板属于输入快照，不原地修改。
+
+```bash
+python "$SKILL_ROOT/scripts/run.py" analysis-page --analysis-root "$ANALYSIS_ROOT" --page 1
+python "$SKILL_ROOT/scripts/run.py" analysis-status --analysis-root "$ANALYSIS_ROOT"
+python "$SKILL_ROOT/scripts/run.py" render-analysis-report --analysis-root "$ANALYSIS_ROOT"
+```
+
+标准发布流程自动生成 `analysis-report/index.html`、`report.json` 和 `receipt.json`，正文展示结论、类型、原始字段值、可比较的数值图及缺口。HTML 仅从已校验结果和对应事实生成，原始数值不因显示格式改变。`analysis-status` 分别返回业务状态、`deliveryStatus`、`reportVerified` 和下一步；进程退出码为 0、等待模型或分析结果已发布，都不能单独代表 HTML 已交付。报告生成失败时，先检查同一分析目录的状态，再运行 `render-analysis-report` 本地恢复；输入或结果已被修改时拒绝恢复，应创建新的分析。
+
+新阶段回执追加在调用所属运行/分析目录的 `execution-events.jsonl`，记录本地阶段真实起止时间、单调时钟耗时、状态和退出码；`returned` 只表示函数返回，业务完成状态以正式回执为准。嵌套阶段不能直接求和，外部 Agent 等待时间和历史缺失耗时保持未知。命令返回后仍在运行的后台任务须另读业务终态，不能把启动命令耗时当作后台任务总耗时。本轮未改变阶段一五页报告。
+
+千川 `prepare-analysis` 返回分页索引与模板路径，`publish-analysis` 校验原有证据链后自动交付 HTML；CLI JSON 的 `execution` 保留该进程命令的 `exitCode/startedAt/endedAt/wallSeconds`。旧分析仍可沿用原校验；没有分页索引时 `analysis-status` 标为 `legacy_not_generated`，不修改旧事实。

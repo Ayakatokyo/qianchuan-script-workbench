@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import shlex
 import uuid
+import time
 from typing import Any, Mapping
 
 from qianchuan_script_acquisition_contracts import AcquisitionRequest
@@ -43,13 +44,14 @@ from qianchuan_script_acquisition_receipt import atomic_json
 from script_creation_contracts import validate_payload
 from script_creation_session import prepare_generation, prepare_rewrite, publish_generation, publish_rewrite
 from workbench_analysis import prepare_analysis, publish_analysis, verify_analysis
+from workbench_analysis import render_analysis_delivery, analysis_delivery_status, verified_analysis_page
 from workbench_reporting import WorkbenchError, render_summary, verify_handoff
 
 
 _IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _SKILL_ROOT = Path(__file__).resolve().parents[1]
 
-_ALL_COMMANDS = {"describe-acquire", "preview-acquire", "acquire", "continue-acquire", "import-run", "render-summary", "prepare-analysis", "publish-analysis", "prepare-generation", "publish-generation", "prepare-rewrite", "publish-rewrite", "verify"}
+_ALL_COMMANDS = {"analysis-page", "analysis-status", "render-analysis-report", "describe-acquire", "preview-acquire", "acquire", "continue-acquire", "import-run", "render-summary", "prepare-analysis", "publish-analysis", "prepare-generation", "publish-generation", "prepare-rewrite", "publish-rewrite", "verify"}
 _ALLOWED_COMMANDS = set(globals().get("_ALLOWED_COMMANDS", _ALL_COMMANDS))
 
 
@@ -1113,6 +1115,13 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="short-video-script")
     commands = parser.add_subparsers(dest="command", required=True)
+    for name in ("analysis-page", "analysis-status", "render-analysis-report"):
+        if name not in _ALLOWED_COMMANDS:
+            continue
+        command = commands.add_parser(name)
+        command.add_argument("--analysis-root", required=True, type=Path)
+        if name == "analysis-page":
+            command.add_argument("--page", required=True, type=int)
 
     if "describe-acquire" in _ALLOWED_COMMANDS:
         commands.add_parser("describe-acquire", help="print machine-readable acquisition inputs and registered sort fields")
@@ -1190,6 +1199,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
     handlers = {
+        "analysis-page": lambda a: verified_analysis_page(a.analysis_root, a.page),
+        "analysis-status": lambda a: analysis_delivery_status(a.analysis_root),
+        "render-analysis-report": lambda a: render_analysis_delivery(a.analysis_root),
         "describe-acquire": _describe_acquire,
         "preview-acquire": _preview_acquire,
         "acquire": _acquire,
@@ -1217,16 +1229,21 @@ def _safe_error(exc: Exception) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    tick = time.monotonic()
+    started = datetime.now(timezone.utc).isoformat()
+    def execution(code):
+        return {"command": args.command, "exitCode": code, "startedAt": started, "endedAt": datetime.now(timezone.utc).isoformat(), "wallSeconds": round(time.monotonic()-tick, 6)}
     try:
         payload = _dispatch(args)
+        payload["execution"] = execution(2 if payload.get("status") == "rpaPaused" else 0)
         print(json.dumps(payload, ensure_ascii=False))
         return 2 if payload.get("status") == "rpaPaused" else 0
     except RpaPausedError as exc:
         print(json.dumps({"status": "rpaPaused", "errorCode": exc.error_code,
-                          "message": _safe_error(exc), "firstBatchCsvGate": exc.gate}, ensure_ascii=False))
+                          "message": _safe_error(exc), "firstBatchCsvGate": exc.gate, "execution": execution(2)}, ensure_ascii=False))
         return 2
     except Exception as exc:
-        print(json.dumps({"status": "failed", "errorCode": getattr(exc, "error_code", type(exc).__name__), "error": _safe_error(exc)}, ensure_ascii=False))
+        print(json.dumps({"status": "failed", "errorCode": getattr(exc, "error_code", type(exc).__name__), "error": _safe_error(exc), "execution": execution(1)}, ensure_ascii=False))
         return 1
 
 

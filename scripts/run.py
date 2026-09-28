@@ -12,6 +12,7 @@ def main():
     runpy.run_module("script_cli", run_name="__main__", init_globals={"_ALLOWED_COMMANDS": {
         "describe-acquire", "preview-acquire", "acquire", "continue-acquire", "import-run",
         "render-summary", "prepare-analysis", "publish-analysis",
+        "analysis-page", "analysis-status", "render-analysis-report",
         "prepare-generation", "publish-generation", "prepare-rewrite", "publish-rewrite", "verify",
     }})
 

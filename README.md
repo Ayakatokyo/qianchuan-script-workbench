@@ -39,3 +39,19 @@ Python 3.11+；运行依赖见 requirements.txt（jsonschema）。 在线步骤�
 按原项目提交 `ab7e68049155336e774437f8e342e8f7c3272648` 的正式清单物化，运行文件原字节保留。新打包器在仓库外工作目录运行，所得 ZIP 与原发行器逐字节一致，CRC、清单与源码字节检查通过。产品测试结果另由本仓实际测试命令和集中交接记录说明，不由打包成功推断。
 
 第二阶段指标来源已修复：新采集写入字段级报表引用；旧运行创建新分析时只读核验原快照并派生证据，不覆盖原事实。准备回执含指标可用数，发布与 verify 再核对来源。详见输入/输出契约。
+
+## 第二优先级：稳定分析交接与正式交付
+
+分析准备完成后，先读返回的 `handoff-index.json`：其中列出全部事实页、输入 SHA-256、记录数量、缺口和结果模板。每页最多五条完整记录，保留全文与来源；不得自行截断正文或重排云图原始 fact_ref 下标。按问题选择的完整范围读完所需分页后，将 `result-template.json` **复制到另一个结果文件**，填写结论及证据；空白模板不能提交为完成结果。事实页、索引和模板属于输入快照，不原地修改。
+
+```bash
+python "$SKILL_ROOT/scripts/run.py" analysis-page --analysis-root "$ANALYSIS_ROOT" --page 1
+python "$SKILL_ROOT/scripts/run.py" analysis-status --analysis-root "$ANALYSIS_ROOT"
+python "$SKILL_ROOT/scripts/run.py" render-analysis-report --analysis-root "$ANALYSIS_ROOT"
+```
+
+标准发布流程自动生成 `analysis-report/index.html`、`report.json` 和 `receipt.json`，正文展示结论、类型、原始字段值、可比较的数值图及缺口。HTML 仅从已校验结果和对应事实生成，原始数值不因显示格式改变。`analysis-status` 分别返回业务状态、`deliveryStatus`、`reportVerified` 和下一步；进程退出码为 0、等待模型或分析结果已发布，都不能单独代表 HTML 已交付。报告生成失败时，先检查同一分析目录的状态，再运行 `render-analysis-report` 本地恢复；输入或结果已被修改时拒绝恢复，应创建新的分析。
+
+新阶段回执追加在调用所属运行/分析目录的 `execution-events.jsonl`，记录本地阶段真实起止时间、单调时钟耗时、状态和退出码；`returned` 只表示函数返回，业务完成状态以正式回执为准。嵌套阶段不能直接求和，外部 Agent 等待时间和历史缺失耗时保持未知。命令返回后仍在运行的后台任务须另读业务终态，不能把启动命令耗时当作后台任务总耗时。本轮未改变阶段一五页报告。
+
+千川 `prepare-analysis` 返回分页索引与模板路径，`publish-analysis` 校验原有证据链后自动交付 HTML；CLI JSON 的 `execution` 保留该进程命令的 `exitCode/startedAt/endedAt/wallSeconds`。旧分析仍可沿用原校验；没有分页索引时 `analysis-status` 标为 `legacy_not_generated`，不修改旧事实。
