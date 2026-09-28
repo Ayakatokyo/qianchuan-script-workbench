@@ -98,6 +98,68 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         self.assertIn("元", doc.find("thead")[0]["text"])
         self.assertIn("2026-09-01", doc.find("body")[0]["text"])
 
+    def test_single_delivery_matches_meta_defaults_and_current_material_fields(self):
+        from workbench_metric_picker import SINGLE_DEFAULT_IDS
+        summary = example()
+        first_values = {key: index + 1000 for index, key in enumerate(SINGLE_DEFAULT_IDS)}
+        first_values.update(extra_metric=0, video_play_count_for_roi2_v2=77)
+        second_values = {"other_a": 0, "other_b": 2, "other_c": None}
+        summary["materials"][0]["metrics"] = {"script_only": 42}
+        summary["materials"][1]["metrics"] = {}
+        summary["metricDefinitions"]["script_only"] = {"label": "仅脚本素材指标", "sourceKey": "script_only"}
+        summary["leaderboard"] = {
+            "materials": [
+                {"materialId": "m1", "metrics": first_values,
+                 "metricDisplay": {**first_values, "stat_cost_for_overall_roi2": "1,234.50",
+                                   "stat_cost_for_roi2": None, "total_pay_order_count_for_roi2": "",
+                                   "extra_metric": "0.00%"}},
+                {"materialId": "m2", "metrics": second_values},
+            ],
+            "metricDefinitions": {key: {"label": f"指标 {key}", "group": "整体指标"}
+                                  for key in (*first_values, *second_values)},
+        }
+        doc = Document(self.render(summary))
+        cards = doc.find("article", **{"class": "material-card"})
+
+        def within(card, data_key):
+            result = []
+            for element in doc.elements:
+                parent = element.get("parent")
+                while parent:
+                    if parent is card:
+                        if data_key in element["attrs"]:
+                            result.append(element)
+                        break
+                    parent = parent.get("parent")
+            return result
+
+        self.assertEqual(json.loads(cards[0]["attrs"]["data-single-defaults"]), [
+            "stat_cost_for_overall_roi2", "total_order_settle_amount_for_roi2_1h",
+            "stat_cost_for_roi2", "total_prepay_and_pay_settle_roi2_1h",
+            "total_pay_order_count_for_roi2", "live_show_count_for_roi2_v2",
+            "live_cvr_rate_for_roi2_v2", "live_watch_count_for_roi2_v2",
+        ])
+        first_metrics = within(cards[0], "data-single-metric")
+        self.assertEqual(len(first_metrics), 11)
+        self.assertEqual(sum("hidden" not in item["attrs"] for item in first_metrics), 8)
+        self.assertIn("已展示指标 8 / 11", cards[0]["text"])
+        self.assertEqual(next(item for item in first_metrics if item["attrs"]["data-single-metric"] == "stat_cost_for_overall_roi2")["text"],
+                         "指标 stat_cost_for_overall_roi21,234.50")
+        for key, raw in (("stat_cost_for_roi2", "1,001"), ("total_pay_order_count_for_roi2", "1,002")):
+            self.assertEqual(next(item for item in first_metrics if item["attrs"]["data-single-metric"] == key)["text"],
+                             f"指标 {key}{raw}")
+        self.assertIn("hidden", next(item for item in first_metrics if item["attrs"]["data-single-metric"] == "extra_metric")["attrs"])
+        extra_choice = doc.find("input", **{"data-pick-metric": "script_only"})[0]
+        self.assertEqual(extra_choice["attrs"]["data-leaderboard-choice"], "false")
+        self.assertIn("hidden", extra_choice["parent"]["attrs"])
+        self.assertEqual(json.loads(cards[1]["attrs"]["data-single-defaults"]), list(second_values))
+        self.assertEqual(len(within(cards[1], "data-single-metric")), 3)
+        self.assertIn("已展示指标 3 / 3", cards[1]["text"])
+        self.assertEqual(next(item for item in within(cards[1], "data-single-metric")
+                              if item["attrs"]["data-single-metric"] == "other_c")["text"], "指标 other_c—")
+        self.assertEqual(len(within(cards[0], "data-single-metric-button")), 1)
+        self.assertNotIn("核心指标", cards[0]["text"])
+
     def test_mismatched_payload_is_never_shown_as_trusted_script(self):
         summary = example()
         script = summary["materials"][1]["script"]

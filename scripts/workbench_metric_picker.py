@@ -4,6 +4,10 @@ from html import escape
 DEFAULT_IDS = ('stat_cost_for_roi2', 'stat_cost_for_overall_roi2',
                'total_prepay_and_pay_settle_roi2_1h', 'total_order_settle_amount_for_roi2_1h',
                'video_play_count_for_roi2_v2', 'video_play_finish_rate_for_roi2_v2')
+SINGLE_DEFAULT_IDS = ('stat_cost_for_overall_roi2', 'stat_cost_for_roi2',
+                      'total_pay_order_count_for_roi2', 'total_order_settle_amount_for_roi2_1h',
+                      'total_prepay_and_pay_settle_roi2_1h', 'live_show_count_for_roi2_v2',
+                      'live_watch_count_for_roi2_v2', 'live_cvr_rate_for_roi2_v2')
 GROUPS = ('整体指标', '净成交指标', '周期结算', '追投调控', '视频互动', '其他指标')
 
 
@@ -15,20 +19,29 @@ def default_columns(columns):
     return chosen if keys.intersection(DEFAULT_IDS) else columns[:6]
 
 
-def render_picker(columns, defaults):
+def default_single_columns(columns):
+    """Match the meta skill's eight preferred delivery fields and sparse fallback."""
+    preferred = [column for column in columns if column['key'] in SINGLE_DEFAULT_IDS]
+    return preferred if preferred else columns[:8]
+
+
+def render_picker(columns, defaults, single_columns=()):
     esc = lambda value: escape(str(value), quote=True)
     selected = {column['key'] for column in defaults}
-    groups = [group for group in GROUPS if any(column.get('group', '其他指标') == group for column in columns)]
-    parts = ['<dialog id="metric-dialog" aria-labelledby="metric-dialog-title"><header class="metric-dialog-header"><div><h2 id="metric-dialog-title">自定义指标</h2><p class="muted">选择需要展示的指标，按右侧顺序排列</p></div><button type="button" data-metric-action="cancel" aria-label="关闭自定义指标">×</button></header><div class="metric-dialog-body"><nav class="metric-groups" aria-label="指标分组">']
+    leaderboard_keys = {column['key'] for column in columns}
+    all_columns = [*columns, *(column for column in single_columns if column['key'] not in leaderboard_keys)]
+    groups = [group for group in GROUPS if any(column.get('group', '其他指标') == group for column in all_columns)]
+    parts = ['<dialog id="metric-dialog" aria-labelledby="metric-dialog-title"><header class="metric-dialog-header"><div><h2 id="metric-dialog-title">自定义指标</h2><p id="metric-dialog-description" class="muted">选择需要展示的指标，按右侧顺序排列</p></div><button type="button" data-metric-action="cancel" aria-label="关闭自定义指标">×</button></header><div class="metric-dialog-body"><nav class="metric-groups" aria-label="指标分组">']
     for group in groups:
         parts.append(f'<button type="button" data-metric-group="{esc(group)}">{esc(group)}<span>{sum(c.get("group", "其他指标") == group for c in columns)}</span></button>')
     parts.append('</nav><section class="metric-options-pane" aria-label="可选指标"><input id="metric-search" type="search" placeholder="搜索指标" aria-label="搜索指标"><div class="metric-options">')
-    for index, column in enumerate(columns):
+    for index, column in enumerate(all_columns):
         key, label, group = column['key'], column['label'], column.get('group', '其他指标')
         checked = ' checked' if key in selected else ''
         unit = f'（{column["unit"]}）' if column.get('unit') else ''
-        parts.append(f'<label class="metric-option" data-option-group="{esc(group)}"><input type="checkbox" data-pick-metric="{esc(key)}" data-label="{esc(label)}" data-unit="{esc(unit)}" data-column-index="{index}"{checked}><span>{esc(label)}</span></label>')
-    parts.append('</div><p id="metric-no-match" class="empty" hidden>没有匹配指标</p></section><aside class="metric-selected" aria-label="已选择指标"><div class="metric-selected-header"><strong>已选择 <span id="metric-count"></span></strong><div><button type="button" data-metric-action="all">全选</button><button type="button" data-metric-action="clear">全不选</button></div></div><p class="metric-fixed">素材名称 / ID <span>固定</span></p><ol id="metric-selected-list"></ol></aside></div><footer class="metric-dialog-footer"><button type="button" data-metric-action="reset">恢复默认</button><div><button type="button" data-metric-action="cancel">取消</button><button type="button" class="primary" data-metric-action="confirm">确定</button></div></footer></dialog>')
+        hidden = '' if key in leaderboard_keys else ' hidden'
+        parts.append(f'<label class="metric-option" data-option-group="{esc(group)}"{hidden}><input type="checkbox" data-pick-metric="{esc(key)}" data-label="{esc(label)}" data-unit="{esc(unit)}" data-column-index="{index if key in leaderboard_keys else -1}" data-leaderboard-choice="{str(key in leaderboard_keys).lower()}"{checked}><span>{esc(label)}</span></label>')
+    parts.append('</div><p id="metric-no-match" class="empty" hidden>没有匹配指标</p></section><aside class="metric-selected" aria-label="已选择指标"><div class="metric-selected-header"><strong>已选择 <span id="metric-count"></span></strong><div><button type="button" data-metric-action="all">全选</button><button type="button" data-metric-action="clear">全不选</button></div></div><p class="metric-fixed" id="metric-fixed">素材名称 / ID <span>固定</span></p><ol id="metric-selected-list"></ol></aside></div><footer class="metric-dialog-footer"><button type="button" data-metric-action="reset">恢复默认</button><div><button type="button" data-metric-action="cancel">取消</button><button type="button" class="primary" data-metric-action="confirm">确定</button></div></footer></dialog>')
     return ''.join(parts)
 
 
@@ -39,24 +52,46 @@ CSS = '''
 '''
 
 SCRIPT = r'''
-function initMetricPicker(rows, onApply) {
+function initMetricPicker(rows, cards, onApply) {
   const $ = id => document.getElementById(id);
   const choices = Array.from(document.querySelectorAll('[data-pick-metric]'));
   if (!choices.length) return;
   const dialog = $('metric-dialog'), search = $('metric-search');
   const groups = Array.from(document.querySelectorAll('[data-metric-group]'));
   const normalize = text => String(text || '').normalize('NFKC').toLocaleLowerCase().trim();
-  const defaults = choices.filter(c => c.checked).map(c => c.dataset.pickMetric);
+  const leaderboardChoices = choices.filter(c => c.dataset.leaderboardChoice === 'true');
+  const defaults = leaderboardChoices.filter(c => c.checked).map(c => c.dataset.pickMetric);
   let active = [...defaults], draft = [...active], group = groups[0]?.dataset.metricGroup || '';
+  let scope = 'leaderboard', currentCard = null, opener = $('metric-button');
+  const singleSelections = new Map();
   const lookup = new Map(choices.map(c => [c.dataset.pickMetric, c]));
   // Keep raw numeric values for sorting and ValueStr for exact platform display.
   const values = new Map(rows.map(row => [row, JSON.parse(row.dataset.values || '[]')]));
+  const singleChoices = () => {
+    if (!currentCard) return [];
+    const available = new Set(JSON.parse(currentCard.dataset.singleFields || '[]'));
+    return choices.filter(choice => available.has(choice.dataset.pickMetric));
+  };
+  const catalog = () => scope === 'single' ? singleChoices() : leaderboardChoices;
+  const defaultSelection = () => scope === 'single'
+    ? JSON.parse(currentCard.dataset.singleDefaults || '[]') : defaults;
+  function selectGroup() {
+    const available = catalog();
+    groups.forEach(button => {
+      const count = available.filter(choice => choice.parentElement.dataset.optionGroup === button.dataset.metricGroup).length;
+      button.hidden = !count;
+      button.querySelector('span').textContent = String(count);
+    });
+    if (!groups.some(button => !button.hidden && button.dataset.metricGroup === group))
+      group = groups.find(button => !button.hidden)?.dataset.metricGroup || '';
+  }
   function renderOptions() {
     const query = normalize(search.value);
+    const available = new Set(catalog());
     let visible = 0;
     choices.forEach(choice => {
       choice.checked = draft.includes(choice.dataset.pickMetric);
-      const match = query ? normalize(choice.dataset.label + ' ' + choice.dataset.pickMetric).includes(query) : choice.parentElement.dataset.optionGroup === group;
+      const match = available.has(choice) && (query ? normalize(choice.dataset.label + ' ' + choice.dataset.pickMetric).includes(query) : choice.parentElement.dataset.optionGroup === group);
       choice.parentElement.hidden = !match;
       if (match) visible++;
     });
@@ -87,9 +122,24 @@ function initMetricPicker(rows, onApply) {
       list.appendChild(item);
     });
   }
-  function refresh() { renderOptions(); renderSelected(); }
-  function close() { dialog.close(); $('metric-button').setAttribute('aria-expanded', 'false'); $('metric-button').focus(); }
+  function refresh() { selectGroup(); renderOptions(); renderSelected(); }
+  function close() { dialog.close(); opener.setAttribute('aria-expanded', 'false'); opener.focus(); }
+  function renderSingleCards(card, selected) {
+    const grid = card.querySelector('[data-single-metric-grid]');
+    const metrics = Array.from(grid.querySelectorAll('[data-single-metric]'));
+    const byKey = new Map(metrics.map(metric => [metric.dataset.singleMetric, metric]));
+    selected.forEach(key => { if (byKey.has(key)) grid.appendChild(byKey.get(key)); });
+    metrics.forEach(metric => { metric.hidden = !selected.includes(metric.dataset.singleMetric); });
+    card.querySelector('[data-single-metric-summary]').textContent = `已展示指标 ${selected.length} / ${metrics.length}`;
+    card.querySelector('[data-single-metric-empty]').hidden = selected.length > 0;
+  }
   function apply() {
+    if (scope === 'single') {
+      const selected = [...draft];
+      singleSelections.set(currentCard.dataset.index, selected);
+      renderSingleCards(currentCard, selected);
+      close(); return;
+    }
     active = [...draft];
     const header = $('material-header');
     Array.from(header.querySelectorAll('[data-column]')).forEach(cell => cell.remove());
@@ -113,10 +163,25 @@ function initMetricPicker(rows, onApply) {
     });
     onApply(active); close();
   }
-  $('metric-button').onclick = () => {
-    draft = [...active]; search.value = ''; group = groups[0]?.dataset.metricGroup || ''; refresh();
-    dialog.showModal(); $('metric-button').setAttribute('aria-expanded', 'true'); search.focus();
+  function open(button, card) {
+    scope = card ? 'single' : 'leaderboard'; currentCard = card; opener = button;
+    draft = card ? [...(singleSelections.get(card.dataset.index) || defaultSelection())] : [...active];
+    search.value = ''; group = groups[0]?.dataset.metricGroup || '';
+    $('metric-dialog-description').textContent = card
+      ? '选择后将按照自定义指标顺序呈现当前素材的投放指标' : '选择需要展示的指标，按右侧顺序排列';
+    $('metric-fixed').firstChild.textContent = card ? '当前素材名称已在详情标题中固定展示 ' : '素材名称 / ID ';
+    refresh(); dialog.showModal(); button.setAttribute('aria-expanded', 'true'); search.focus();
+  }
+  $('metric-button').onclick = () => { open($('metric-button'), null);
   };
+  cards.forEach(card => {
+    if (typeof card.querySelector !== 'function') return;
+    const button = card.querySelector('[data-single-metric-button]');
+    if (!button) return;
+    renderSingleCards(card, JSON.parse(card.dataset.singleDefaults || '[]'));
+    button.hidden = false;
+    button.onclick = () => open(button, card);
+  });
   dialog.oncancel = event => { event.preventDefault(); close(); };
   dialog.onclick = event => { if (event.target === dialog) close(); };
   search.oninput = renderOptions;
@@ -129,7 +194,7 @@ function initMetricPicker(rows, onApply) {
     const action = button.dataset.metricAction;
     if (action === 'confirm') return apply();
     if (action === 'cancel') return close();
-    draft = action === 'all' ? choices.map(c => c.dataset.pickMetric) : action === 'reset' ? [...defaults] : [];
+    draft = action === 'all' ? catalog().map(c => c.dataset.pickMetric) : action === 'reset' ? [...defaultSelection()] : [];
     refresh();
   }; });
 }

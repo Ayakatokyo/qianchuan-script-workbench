@@ -7,11 +7,13 @@ from __future__ import annotations
 
 from html import escape
 import json
+from pathlib import Path
 from typing import Any, Mapping
 
 from workbench_formula_overview import render_formula_overview, CSS as FORMULA_CSS, SCRIPT as FORMULA_SCRIPT
 from workbench_script_interactions import render_linked_script, CSS as LINKED_CSS, SCRIPT as LINKED_SCRIPT
-from workbench_metric_picker import render_picker, default_columns, CSS as METRIC_CSS, SCRIPT as METRIC_SCRIPT
+from workbench_metric_picker import (render_picker, default_columns, default_single_columns,
+                                     CSS as METRIC_CSS, SCRIPT as METRIC_SCRIPT)
 from workbench_quote_library import render_quote_library, CSS as LIBRARY_CSS, SCRIPT as LIBRARY_SCRIPT
 
 
@@ -27,6 +29,17 @@ def _display(value: Any) -> str:
 
 def _e(value: Any) -> str:
     return escape(_display(value), quote=True)
+
+
+def _single_metric_value(value: Any) -> str:
+    """Use the platform display string, or the meta report's numeric style."""
+    if value is None or value == "":
+        return "—"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return f"{value:,}"
+    if isinstance(value, float):
+        return f"{value:,.4f}".rstrip("0").rstrip(".")
+    return str(value)
 
 
 def _structured(value: Any) -> str:
@@ -61,6 +74,15 @@ def _metric_columns(summary: Mapping[str, Any], materials: list) -> list[dict]:
             definition = {**ranking, **definition}
         columns.append({'key': key, 'label': definition.get('label') or key, 'unit': definition.get('unit'), 'group': definition.get('group', '其他指标')})
     return columns
+
+
+def _single_metric_order(columns: list[dict]) -> list[dict]:
+    """Use the same field registry order as the meta skill's detail cards."""
+    path = Path(__file__).resolve().parent.parent / 'config/report-metric-labels.json'
+    fields = json.loads(path.read_text(encoding='utf-8'))['fields']
+    order = {field['id']: index for index, field in enumerate(fields)}
+    return [column for _, column in sorted(enumerate(columns),
+                                           key=lambda pair: (order.get(pair[1]['key'], len(order)), pair[0]))]
 
 
 def _trusted_field(script: Mapping[str, Any], field: str) -> Any:
@@ -101,21 +123,31 @@ def _formula_overview(materials: list) -> str:
     return render_formula_overview(materials, _formula_groups)
 
 
-def _card(material: Mapping[str, Any], index: int, columns: list[dict]) -> str:
+def _card(material: Mapping[str, Any], index: int, columns: list[dict], report_material: Mapping[str, Any] | None) -> str:
     script = material.get('script') or {}
     title = material.get('materialName') or '素材名称未提供'
-    parts = [f'<article class="material-card" id="material-{index}" data-index="{index}">',
+    metrics = {**(material.get('metrics') or {}), **((report_material or {}).get('metrics') or {})}
+    displays = {**metrics, **(material.get('metricDisplay') or {}),
+                **((report_material or {}).get('metricDisplay') or {})}
+    available = [column for column in columns if column['key'] in metrics]
+    defaults = default_single_columns(available)
+    default_keys = [column['key'] for column in defaults]
+    fields_json = escape(json.dumps([column['key'] for column in available], ensure_ascii=False), quote=True)
+    defaults_json = escape(json.dumps(default_keys, ensure_ascii=False), quote=True)
+    parts = [f'<article class="material-card" id="material-{index}" data-index="{index}" data-single-fields="{fields_json}" data-single-defaults="{defaults_json}">',
              '<header class="material-heading"><div>',
              f'<p class="eyebrow">素材排名 {_e(material.get("rank"))}</p><h2 class="material-name">{_e(title)}</h2>',
              f'<p class="material-id">素材 ID：{_e(material.get("materialId"))}</p></div></header>']
-    parts.append('<section class="single-block"><h3>核心指标</h3><div class="metric-grid">')
-    metrics = material.get('metrics') or {}
-    for column in columns:
-        unit = f' · {_e(column["unit"])}' if column['unit'] else ''
-        parts.append(f'<div class="metric-card"><span>{_e(column["label"])}{unit}</span><strong>{_e(metrics.get(column["key"]))}</strong></div>')
-    if not columns:
-        parts.append('<p class="muted">未提供指标。</p>')
-    parts.append('</div></section>')
+    parts.append(f'<section class="single-block"><div class="single-metric-heading"><h3>投放数据</h3><button type="button" data-single-metric-button aria-haspopup="dialog" aria-expanded="false" hidden>自定义指标</button></div><p class="single-metric-summary" data-single-metric-summary>已展示指标 {len(default_keys)} / {len(available)}</p><div class="metric-grid" data-single-metric-grid>')
+    for column in available:
+        key = column['key']
+        hidden = '' if key in default_keys else ' hidden'
+        display_value = displays.get(key)
+        if display_value is None or display_value == "":
+            display_value = metrics.get(key)
+        parts.append(f'<div class="metric-card" data-single-metric="{_e(key)}"{hidden}><span>{_e(column["label"])}</span><strong>{_e(_single_metric_value(display_value))}</strong></div>')
+    parts.append('</div>')
+    parts.append('<p class="muted" data-single-metric-empty' + (' hidden' if available else '') + '>暂无投放数据有效数据。</p></section>')
     parts.append(render_linked_script(script, _formula_groups(script), material_index=index))
     parts.append('</article>')
     return ''.join(parts)
@@ -127,6 +159,13 @@ _STYLE = """
 @media(max-width:760px){body{padding:18px 12px}h1{font-size:24px}.section-nav{gap:6px}.section-nav a{font-size:12px;padding:8px 10px}.filter-config-layout,.single-material-shell,.identity-grid{grid-template-columns:minmax(0,1fr)}.single-material-selector{position:static;max-height:320px}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.panel,.material-card{padding:16px}.material-heading{display:block}.material-heading .badge{margin-bottom:8px}.bar-label{display:block}.bar-label span{display:block;margin-top:5px}.toolbar label{width:100%}.toolbar label:first-child{min-width:0}.material-name-column{min-width:260px;width:260px}.material-title{max-width:230px}.pager{align-items:flex-start}.pager>div{gap:4px;flex-wrap:wrap}.pager button{font-size:12px;padding:7px 9px}.context{grid-template-columns:1fr}}
 @media(max-width:400px){.metric-grid{grid-template-columns:1fr}}
 @media print{body{background:white;padding:0}.section-nav,.toolbar,.pager,.single-material-selector{display:none!important}.single-material-shell{display:block}.panel,.material-card{box-shadow:none}.footer{margin-bottom:0}}
+.single-metric-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;margin-bottom:14px;padding-left:12px;border-left:4px solid var(--accent)}
+.single-metric-heading h3{margin:0;color:#1f2f49;font-size:18px;line-height:1.35}
+.single-metric-summary{margin:0 0 8px;color:var(--muted);font-size:12px}
+.metric-card{min-height:104px;padding:16px;border-radius:12px}
+.metric-card span{font-size:14px}
+.metric-card strong{font-size:24px;margin-top:8px}
+@media(max-width:760px){.metric-grid{grid-template-columns:1fr}}
 """
 
 _SCRIPT = """
@@ -204,7 +243,7 @@ _SCRIPT = """
     sortMetric = button.dataset.sortMetric; page = 1; updateTable();
   }; }); }
   bindSorting();
-  initMetricPicker(rows, active => {
+  initMetricPicker(rows, cards, active => {
     if (!active.includes(sortMetric)) { sortMetric = null; direction = 0; }
     bindSorting(); page = 1; updateTable();
   });
@@ -237,8 +276,14 @@ def render_html(summary: Mapping[str, Any]) -> str:
     table_summary = {**summary, 'metricDefinitions': leaderboard.get('metricDefinitions', summary.get('metricDefinitions', {}))}
     all_columns = _metric_columns(table_summary, leaderboard_materials)
     columns = default_columns(all_columns)
-    script_columns = _metric_columns(summary, materials)
     material_indexes = {str(item.get('materialId')): index for index, item in enumerate(materials)}
+    report_materials_by_id = {str(item.get('materialId')): item for item in leaderboard_materials}
+    script_sources = [{**item, 'metrics': {**(item.get('metrics') or {}),
+                       **(report_materials_by_id.get(str(item.get('materialId'))) or {}).get('metrics', {})}}
+                      for item in materials]
+    script_columns = _single_metric_order(_metric_columns(
+        {**summary, 'metricDefinitions': {**(summary.get('metricDefinitions') or {}),
+                                          **(leaderboard.get('metricDefinitions') or {})}}, script_sources))
     parts = ['<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">',
              '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">',
              '<title>千川素材脚本数据工作台</title><style>' + _STYLE + FORMULA_CSS + LINKED_CSS + LIBRARY_CSS + METRIC_CSS + '</style></head><body><main>',
@@ -287,13 +332,14 @@ def render_html(summary: Mapping[str, Any]) -> str:
     if not leaderboard_materials:
         parts.append('<div class="empty">暂无素材数据。</div>')
     parts.append('<div class="empty" id="no-results" hidden>没有匹配素材。</div><div class="pager" id="table-pager" hidden><span id="table-range"></span><div><button type="button" id="first-page">首页</button><button type="button" id="previous-page">上一页</button><span id="page-number"></span><button type="button" id="next-page">下一页</button><button type="button" id="last-page">尾页</button></div></div></section>')
-    parts.append(render_picker(all_columns, columns))
+    parts.append(render_picker(all_columns, columns, script_columns))
     parts.append('<section id="scripts-panel" data-section-panel="scripts">' + _formula_overview(materials) + '</section>')
     parts.append('<section id="single-material-panel" data-section-panel="single-material"><div class="single-material-shell"><aside class="single-material-selector"><h2>单素材脚本</h2><label id="selector-search" hidden>查找素材<input type="search" id="single-material-search" placeholder="搜索名称或 ID"></label>')
     for index, material in enumerate(materials):
         parts.append(f'<a class="material-option" href="#material-{index}" data-open-material="{index}" title="{_e(material.get("materialName") or "素材名称未提供")}"><span class="option-name">{_e(material.get("rank"))}. {_e(material.get("materialName") or "素材名称未提供")}</span><small>{_e(material.get("materialId"))}</small></a>')
     parts.append('<p class="muted" id="selector-empty" hidden>没有匹配素材。</p></aside><div class="single-material-main">')
-    parts.extend(_card(material, index, script_columns) for index, material in enumerate(materials))
+    parts.extend(_card(material, index, script_columns, report_materials_by_id.get(str(material.get('materialId'))))
+                 for index, material in enumerate(materials))
     if not materials:
         parts.append('<div class="panel empty">暂无素材数据。</div>')
     parts.append('</div></div></section>')
