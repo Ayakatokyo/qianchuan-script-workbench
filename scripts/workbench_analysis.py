@@ -12,7 +12,7 @@ from qianchuan_script_acquisition_receipt import atomic_json
 from script_creation_contracts import validate_payload
 from workbench_reporting import WorkbenchError, verify_handoff
 from qianchuan_script_acquisition_fact_pack import bind_report_metric_sources
-from analysis_delivery import prepare_pages, read_page, verify_pages, render_delivery, verify_delivery, timed_phase
+from analysis_delivery import prepare_pages, read_page, verify_pages, register_host_report, verify_delivery, has_report_receipt, timed_phase, write
 
 
 _IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -423,31 +423,40 @@ def publish_analysis(analysis_dir: Path, result_path: Path) -> dict[str, Any]:
     completed_status = {**status, "state": "completed", "resultSha256": _sha256(analysis_dir / "analysis-result.json"), "reportSha256": _sha256(analysis_dir / "report.md")}
     validate_payload(completed_status, "workbench-operation-status.schema.json")
     atomic_json(status_path, completed_status)
-    delivery = render_analysis_delivery(analysis_dir)
-    return {**delivery, "operation": "analysis", "runId": run_dir.name, "analysisId": analysis_dir.name, "outputPath": str(analysis_dir / "analysis-result.json")}
+    handoff_path = analysis_dir / "host-report-handoff.json"
+    write(handoff_path, {
+        "schemaVersion": 1, "identity": {"runId": run_dir.name, "analysisId": analysis_dir.name},
+        "businessQuestion": plan["requestText"],
+        "analysisResult": {"path": "analysis-result.json", "sha256": _sha256(analysis_dir / "analysis-result.json")},
+        "verifiedFacts": {"path": "facts-slice.json", "sha256": _sha256(analysis_dir / "facts-slice.json")},
+        "plan": {"path": "validated-plan.json", "sha256": _sha256(analysis_dir / "validated-plan.json")},
+        "factPages": {"path": "handoff-index.json", "sha256": _sha256(analysis_dir / "handoff-index.json")},
+        "sourcePackSha256": expected_hashes["sourcePackSha256"],
+        "guidance": "宿主用已核验事实和业务问题独立组织回答；结构化结果用于审计，不限制章节、结论数或表达方式。新增事实先通过现有事实读取或重新选择路径核对，不重新采集。报告可选 HTML、Markdown 或纯文本，直接回应问题并保留可追溯来源。",
+    })
+    return {"status": "completed", "deliveryStatus": "awaiting_host_report", "reportVerified": False,
+            "nextAction": "create_and_register_host_report", "handoffPath": str(handoff_path),
+            "operation": "analysis", "runId": run_dir.name, "analysisId": analysis_dir.name,
+            "outputPath": str(analysis_dir / "analysis-result.json")}
 
 
-@timed_phase("render_analysis_report")
-def render_analysis_delivery(analysis_dir: Path) -> dict[str, Any]:
+@timed_phase("register_host_report")
+def register_analysis_report(analysis_dir: Path, revision: str | None = None, report_format: str | None = None) -> dict[str, Any]:
     root = Path(analysis_dir).resolve()
     verify_analysis(root)
+    verify_pages(root)
     if _read_json(root / "status.json")["state"] != "completed":
-        raise WorkbenchError("analysis_not_completed", "publish a validated result before rendering")
-    result = _read_json(root / "analysis-result.json")
-    materials = {m["materialId"]: m for m in _read_json(root / "facts-slice.json")["materials"]}
-    labels = {"platformFact": "平台事实", "textObservation": "文本观察", "modelInference": "模型推断", "suggestion": "待验证建议"}
-    cards = []
-    for conclusion in result["conclusions"]:
-        evidence = []
-        for ref in conclusion["evidenceRefs"]:
-            material = materials[ref["materialId"]]
-            field = ref.get("fieldId") if ref["field"] == "metric" else ref["field"]
-            entry = material["metrics" if ref["field"] == "metric" else "scriptFields"][field]
-            evidence.append({"material": material.get("materialName") or ref["materialId"], "field": entry.get("label") or {"text": "脚本正文", "formula": "内容公式", "detail": "脚本详情", "data": "结构数据"}.get(field, field),
-                             "value": entry.get("value"), "isMetric": ref["field"] == "metric", "sourceRefs": ref["sourceRefs"]})
-        cards.append({"claim": conclusion["claim"], "type": labels.get(conclusion["classification"], conclusion["classification"]), "evidence": evidence})
-    return render_delivery(root, "千川脚本分析", {"runId": result["runId"], "analysisId": root.name}, cards,
-                           result["limitations"] + [_NON_CAUSAL_BOUNDARY], ["analysis-result.json", "facts-slice.json", "receipt.json"])
+        raise WorkbenchError("analysis_not_completed", "publish a validated result before registering a host report")
+    handoff = _read_json(root / "host-report-handoff.json")
+    if handoff.get("identity") != {"runId": root.parent.parent.name, "analysisId": root.name}:
+        raise ValueError("host report handoff identity mismatch")
+    for item in ("analysisResult", "verifiedFacts", "plan", "factPages"):
+        source = handoff[item]
+        if _sha256(root / source["path"]) != source["sha256"]:
+            raise ValueError("host report handoff source hash mismatch: " + item)
+    return register_host_report(root, handoff["identity"],
+                                ["host-report-handoff.json", "analysis-result.json", "facts-slice.json", "validated-plan.json", "handoff-index.json", "receipt.json"],
+                                revision=revision, report_format=report_format)
 
 
 def analysis_delivery_status(analysis_dir: Path) -> dict[str, Any]:
@@ -455,11 +464,14 @@ def analysis_delivery_status(analysis_dir: Path) -> dict[str, Any]:
     verify_analysis(root)
     status = _read_json(root / "status.json")
     index = verify_pages(root) if (root / "handoff-index.json").exists() else None
-    report = verify_delivery(root) if (root / "analysis-report/receipt.json").exists() else None
+    report = verify_delivery(root) if has_report_receipt(root) else None
     return {"status": status["state"], "analysisId": root.name, "verification": "passed",
             "handoff": "verified" if index else "legacy_not_generated", "pageCount": len(index["pages"]) if index else None,
-            "deliveryStatus": "completed" if report else "not_generated", "reportVerified": bool(report),
-            "nextAction": "read_analysis_pages" if status["state"] == "awaitingModel" else ("deliver_report" if report else "render-analysis-report")}
+            "deliveryStatus": ("legacy_completed" if report.get("schemaVersion") == 1 else "completed") if report else ("awaiting_host_report" if status["state"] == "completed" else "not_generated"),
+            "reportVerified": bool(report),
+            "reportPath": report.get("reportPath") if report else None,
+            "reportRevisions": report.get("revisionHistory", []) if report else [],
+            "nextAction": "read_analysis_pages" if status["state"] == "awaitingModel" else ("deliver_report" if report else "create_and_register_host_report")}
 
 
 def verified_analysis_page(analysis_dir: Path, page: int) -> dict[str, Any]:

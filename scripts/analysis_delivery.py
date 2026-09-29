@@ -3,12 +3,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from functools import wraps
 import hashlib
-import html
+from html.parser import HTMLParser
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import time
+from urllib.parse import unquote, urlsplit
 
 
 def read(path):
@@ -85,47 +87,158 @@ def read_page(root, number):
     return {**page, "pageCount": len(index["pages"]), "nextPage": number+1 if number < len(index["pages"]) else None}
 
 
-def render_delivery(root, title, identity, cards, limitations, sources):
-    """Deterministic offline HTML; the adapter must first validate business evidence."""
-    root = Path(root)
-    inputs = {p: sha(local_file(root, p)) for p in sources}
-    data = {"schemaVersion": 1, "title": title, "identity": identity,
-            "conclusions": cards, "limitations": limitations, "inputHashes": inputs}
-    esc = lambda value: html.escape(str(value), quote=True)
-    blocks = []
-    for card in cards:
-        evidence = "".join("<tr><td>" + esc(e["material"]) + "</td><td>" + esc(e["field"]) + "</td><td><pre>" + esc(e["value"] if isinstance(e["value"], str) else json.dumps(e["value"], ensure_ascii=False)) + "</pre></td></tr>" for e in card["evidence"])
-        blocks.append("<article><small>" + esc(card["type"]) + "</small><h2>" + esc(card["claim"]) + "</h2><details open><summary>核对依据</summary><table><thead><tr><th>素材</th><th>字段</th><th>真实值 / 原文</th></tr></thead><tbody>" + evidence + "</tbody></table></details></article>")
-    counts = {}
-    for card in cards:
-        counts[card["type"]] = counts.get(card["type"], 0) + 1
-    chart = "".join("<p>" + esc(k) + " <meter min='0' max='" + str(max(1, len(cards))) + "' value='" + str(v) + "'></meter> " + str(v) + "</p>" for k, v in counts.items())
-    numeric = {}
-    for card in cards:
-        for entry in card["evidence"]:
-            value = entry["value"]
-            if entry.get("isMetric") and type(value) in (int, float):
-                numeric.setdefault(entry["field"], {})[entry["material"]] = value
-    for field, values in numeric.items():
-        if len(values) < 2:
+class _LocalAssets(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.urls = []
+
+    def handle_starttag(self, tag, attrs):
+        values = dict(attrs)
+        for name in ("src", "poster"):
+            if values.get(name):
+                self.urls.append(values[name])
+        if tag == "link" and values.get("href"):
+            self.urls.append(values["href"])
+        if values.get("srcset"):
+            self.urls.extend(item.strip().split()[0] for item in values["srcset"].split(",") if item.strip())
+
+
+def _asset_path(folder, parent, url):
+    parsed = urlsplit(url.strip())
+    if parsed.scheme == "data" or (not parsed.path and parsed.fragment):
+        return None
+    if parsed.scheme or parsed.netloc or not parsed.path or parsed.path.startswith("/"):
+        raise ValueError("report asset must be a local relative file: " + url)
+    path = (parent / unquote(parsed.path)).resolve()
+    if not path.is_relative_to(folder.resolve()) or not path.is_file():
+        raise ValueError("report asset missing or outside report directory: " + url)
+    return path
+
+
+_REPORT_ENTRIES = {"html": "index.html", "markdown": "report.md", "text": "report.txt"}
+
+
+def _check_report_assets(folder, entry_name="index.html"):
+    entry = local_file(folder, entry_name)
+    if not entry.read_text(encoding="utf-8").strip():
+        raise ValueError("host report is empty")
+    pending = [entry]
+    seen = set()
+    while pending:
+        path = pending.pop()
+        if path in seen:
             continue
-        low, high = min(0, min(values.values())), max(1, max(values.values()))
-        chart += "<h2>" + esc(field) + " · 引用素材对比</h2>"
-        chart += "".join("<p>" + esc(material) + " <meter min='" + str(low) + "' max='" + str(high) + "' value='" + str(value) + "'></meter> " + esc(value) + "</p>" for material, value in values.items())
-    document = "<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>" + esc(title) + "</title><style>body{max-width:1100px;margin:40px auto;padding:0 20px;font-family:system-ui;background:#f5f7fb;color:#203045}article,header,aside{background:white;border:1px solid #dde4ed;border-radius:12px;padding:24px;margin:20px 0}h2{font-size:20px}table{width:100%;border-collapse:collapse}td,th{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid #eee}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:0}small{color:#566c83}meter{width:180px} @media(max-width:650px){td,th{padding:6px}body{padding:0 10px}}</style><header><h1>" + esc(title) + "</h1><p>" + esc(identity.get("analysisId", "")) + " · " + str(len(cards)) + " 条结论</p><p>以下结论仅适用于本次所选素材；指标关联不代表因果。</p>" + chart + "</header>" + "".join(blocks) + "<aside><h2>缺口与限制</h2><ul>" + "".join("<li>" + esc(x) + "</li>" for x in limitations) + "</ul></aside></html>"
-    folder = root / "analysis-report"
-    write(folder / "report.json", data)
-    write(folder / "index.html", document)
-    receipt = {"schemaVersion": 1, "status": "completed", "verification": "passed", "identity": identity,
-               "inputHashes": inputs, "outputs": {"report.json": sha(folder / "report.json"), "index.html": sha(folder / "index.html")}}
+        seen.add(path)
+        if path.suffix.lower() == ".html":
+            parser = _LocalAssets()
+            parser.feed(path.read_text(encoding="utf-8"))
+            urls = parser.urls + re.findall(r"url\(\s*['\"]?([^'\")]+)", path.read_text(encoding="utf-8"))
+        elif path.suffix.lower() == ".css":
+            css = path.read_text(encoding="utf-8")
+            urls = re.findall(r"url\(\s*['\"]?([^'\")]+)", css)
+            urls += re.findall(r"@import\s+['\"]([^'\"]+)", css)
+        elif path.suffix.lower() == ".md":
+            urls = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", path.read_text(encoding="utf-8"))
+        else:
+            continue
+        pending.extend(target for url in urls if (target := _asset_path(folder, path.parent, url)) is not None)
+
+
+def register_host_report(root, identity, sources, revision=None, report_format=None):
+    """Seal a host-authored report after the caller verifies its analysis result."""
+    root = Path(root).resolve()
+    if revision is not None and not re.fullmatch(r"[0-9]{4}", revision):
+        raise ValueError("report revision must be four digits")
+    if revision is not None:
+        existing = sorted(path.parent.name for path in (root / "analysis-report/revisions").glob("*/receipt.json"))
+        if existing and revision <= existing[-1]:
+            raise ValueError("report revision must be newer than the current revision")
+    folder = root / "analysis-report" / "revisions" / revision if revision else root / "analysis-report"
+    if (folder / "receipt.json").exists():
+        raise ValueError("report receipt already exists; do not overwrite a delivered report")
+    available = [name for name in _REPORT_ENTRIES.values() if (folder / name).is_file()]
+    if report_format is None:
+        if len(available) != 1:
+            raise ValueError("report directory must contain exactly one entry: index.html, report.md or report.txt")
+        entry_name = available[0]
+        report_format = next(key for key, name in _REPORT_ENTRIES.items() if name == entry_name)
+    else:
+        if report_format not in _REPORT_ENTRIES:
+            raise ValueError("unsupported report format")
+        entry_name = _REPORT_ENTRIES[report_format]
+        if available != [entry_name]:
+            raise ValueError("report entry missing or multiple formats present")
+    _check_report_assets(folder, entry_name)
+    outputs = {}
+    for path in folder.rglob("*"):
+        if revision is None and path.is_relative_to(folder / "revisions"):
+            continue
+        if path.is_symlink():
+            raise ValueError("report symlink is not allowed")
+        if path.is_file():
+            outputs[path.relative_to(folder).as_posix()] = sha(path)
+    inputs = {name: sha(local_file(root, name)) for name in sources}
+    receipt = {"schemaVersion": 3 if revision else 2, "status": "completed", "verification": "passed", "producer": "conversation_host",
+               "identity": identity, "inputHashes": inputs, "outputs": outputs,
+               "entryPath": entry_name, "format": report_format, "revision": revision}
     write(folder / "receipt.json", receipt)
     verify_delivery(root)
-    return {"status": "completed", "verification": "passed", "reportPath": str(folder / "index.html"), "receiptPath": str(folder / "receipt.json")}
+    return {"status": "completed", "deliveryStatus": "completed", "reportVerified": True,
+            "reportPath": str(folder / entry_name), "receiptPath": str(folder / "receipt.json"), "revision": revision}
+
+
+def has_report_receipt(root):
+    folder = Path(root) / "analysis-report"
+    return (folder / "receipt.json").is_file() or any((folder / "revisions").glob("*/receipt.json"))
+
+
+def _verify_report_receipt(root, folder):
+    receipt = read(folder / "receipt.json")
+    version = receipt.get("schemaVersion")
+    if version in (2, 3):
+        entry = receipt.get("entryPath", "index.html")
+        if (receipt.get("status") != "completed" or receipt.get("verification") != "passed"
+                or receipt.get("producer") != "conversation_host"
+                or receipt.get("identity", {}).get("analysisId") != root.name
+                or not receipt.get("inputHashes") or entry not in receipt.get("outputs", {})
+                or entry not in _REPORT_ENTRIES.values()
+                or (receipt.get("format") is not None and _REPORT_ENTRIES.get(receipt["format"]) != entry)
+                or (version == 3 and folder.name != receipt.get("revision"))):
+            raise ValueError("invalid host report receipt")
+        for name, digest in receipt["inputHashes"].items():
+            if sha(local_file(root, name)) != digest:
+                raise ValueError("host report input changed: " + name)
+        actual = {path.relative_to(folder).as_posix(): sha(path) for path in folder.rglob("*")
+                  if path.is_file() and path.name != "receipt.json"
+                  and (folder != root / "analysis-report" or not path.is_relative_to(folder / "revisions"))}
+        if actual != receipt["outputs"]:
+            raise ValueError("host report output missing, added or changed")
+        _check_report_assets(folder, entry)
+        return receipt
+    return None
 
 
 def verify_delivery(root):
     root = Path(root)
-    receipt = read(root / "analysis-report/receipt.json")
+    base = root / "analysis-report"
+    folders = ([base] if (base / "receipt.json").is_file() else [])
+    folders += sorted(path.parent for path in (base / "revisions").glob("*/receipt.json"))
+    if not folders:
+        raise ValueError("analysis report receipt missing")
+    for folder in folders:
+        checked = _verify_report_receipt(root, folder)
+        if checked is not None:
+            receipt = checked
+            continue
+        if folder != base:
+            raise ValueError("invalid report revision receipt")
+        receipt = read(folder / "receipt.json")
+        if len(folders) > 1:
+            raise ValueError("legacy report cannot be revised in place")
+        break
+    if receipt.get("schemaVersion") in (2, 3):
+        return {**receipt, "reportPath": str(folders[-1] / receipt.get("entryPath", "index.html")),
+                "revisionHistory": [str(folder / "receipt.json") for folder in folders]}
     if (receipt.get("schemaVersion") != 1 or receipt.get("status") != "completed"
             or receipt.get("verification") != "passed"
             or set(receipt.get("outputs", {})) != {"report.json", "index.html"}

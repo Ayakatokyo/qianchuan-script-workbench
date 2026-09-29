@@ -97,18 +97,20 @@ python "$SKILL_ROOT/scripts/run.py" verify --path "$RUN_DIR/analysis/$ANALYSIS_I
 
 没有绑定快照的历史导入沿用其原证据，不能凭空补来源。重复 ID 无法唯一定位、快照/行/值/引用冲突直接报错。`metric_value_missing` 表示值为空，`metric_source_missing` 表示有值但没有可用来源；准备命令返回逐指标 `metricCoverage`。表现分组也需要引用指标证据，不能仅引用脚本文字支撑高低表现分类。
 
-## 第二优先级：稳定分析交接与正式交付
+## 第二阶段宿主报告交付（2026-09-29）
 
-分析准备完成后，先读返回的 `handoff-index.json`：其中列出全部事实页、输入 SHA-256、记录数量、缺口和结果模板。每页最多五条完整记录，保留全文与来源；不得自行截断正文或重排云图原始 fact_ref 下标。按问题选择的完整范围读完所需分页后，将 `result-template.json` **复制到另一个结果文件**，填写结论及证据；空白模板不能提交为完成结果。事实页、索引和模板属于输入快照，不原地修改。
+分析准备继续使用 `handoff-index.json` 的完整事实分页和 `result-template.json`；按业务问题读取所需页，保留原文、字段来源和哈希，复制模板到新结果文件再填写。`publish-analysis` 先校验结构化结果与证据，仅写 `host-report-handoff.json`，返回 `deliveryStatus=awaiting_host_report`；这不表示最终报告已交付。
+
+当前对话宿主从已核验事实、原业务问题和必要的指标口径出发独立分析并组织报告。结构化结果用于审计重点主张，不规定报告的章节、结论数量、图表或叙事顺序；报告不必逐条复述结果卡。新增事实与计算须引用可核对的原字段和来源，推断、假设和建议须明确标注；需要更多同轮事实时使用现有读取或重新选择路径，不重新采集。按用户需求直接交付对话文本、Markdown 或 HTML；只有选择文件交付时才登记本地回执。
 
 ```bash
 python "$SKILL_ROOT/scripts/run.py" analysis-page --analysis-root "$ANALYSIS_ROOT" --page 1
 python "$SKILL_ROOT/scripts/run.py" analysis-status --analysis-root "$ANALYSIS_ROOT"
-python "$SKILL_ROOT/scripts/run.py" render-analysis-report --analysis-root "$ANALYSIS_ROOT"
+# 文件交付示例：把 report.md 放在 analysis-report/revisions/0001/ 后登记
+python "$SKILL_ROOT/scripts/run.py" register-analysis-report --analysis-root "$ANALYSIS_ROOT" --revision 0001 --format markdown
+# 同一分析下修订：保留 0001，在 revisions/0002/ 写新文件后登记
+python "$SKILL_ROOT/scripts/run.py" register-analysis-report --analysis-root "$ANALYSIS_ROOT" --revision 0002 --format markdown
+python "$SKILL_ROOT/scripts/run.py" analysis-status --analysis-root "$ANALYSIS_ROOT"
 ```
 
-标准发布流程自动生成 `analysis-report/index.html`、`report.json` 和 `receipt.json`，正文展示结论、类型、原始字段值、可比较的数值图及缺口。HTML 仅从已校验结果和对应事实生成，原始数值不因显示格式改变。`analysis-status` 分别返回业务状态、`deliveryStatus`、`reportVerified` 和下一步；进程退出码为 0、等待模型或分析结果已发布，都不能单独代表 HTML 已交付。报告生成失败时，先检查同一分析目录的状态，再运行 `render-analysis-report` 本地恢复；输入或结果已被修改时拒绝恢复，应创建新的分析。
-
-新阶段回执追加在调用所属运行/分析目录的 `execution-events.jsonl`，记录本地阶段真实起止时间、单调时钟耗时、状态和退出码；`returned` 只表示函数返回，业务完成状态以正式回执为准。嵌套阶段不能直接求和，外部 Agent 等待时间和历史缺失耗时保持未知。命令返回后仍在运行的后台任务须另读业务终态，不能把启动命令耗时当作后台任务总耗时。本轮未改变阶段一五页报告。
-
-千川 `prepare-analysis` 返回分页索引与模板路径，`publish-analysis` 校验原有证据链后自动交付 HTML；CLI JSON 的 `execution` 保留该进程命令的 `exitCode/startedAt/endedAt/wallSeconds`。旧分析仍可沿用原校验；没有分页索引时 `analysis-status` 标为 `legacy_not_generated`，不修改旧事实。
+登记前重新核对分析结果、来源及交接哈希；文件交付支持 `index.html`、`report.md` 或 `report.txt`，分别用 `--format html|markdown|text`。登记时检查正文非空、HTML/CSS/Markdown 本地资源可用且不越出该版目录，记录输入及每个输出文件 SHA-256。`deliveryStatus=completed`、`reportVerified=true` 表示本地文件通过完整性校验，不代替事实解释、视觉观感或用户验收。展示修改在同一分析下新增递增的四位 revision，旧文件和旧收据保持不变；涉及新事实的实质修订先用既有事实读取与选择路径核验，并更新相应审计结果或建立新分析，无需重跑采集。旧版无 revision 的宿主 HTML 可继续校验。历史固定报告的 v1 收据只读核验，标为 `legacy_completed`。阶段一固定素材汇总报告不变。宿主报告制作耗时单独记录。

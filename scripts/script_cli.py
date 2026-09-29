@@ -44,14 +44,14 @@ from qianchuan_script_acquisition_receipt import atomic_json
 from script_creation_contracts import validate_payload
 from script_creation_session import prepare_generation, prepare_rewrite, publish_generation, publish_rewrite
 from workbench_analysis import prepare_analysis, publish_analysis, verify_analysis
-from workbench_analysis import render_analysis_delivery, analysis_delivery_status, verified_analysis_page
+from workbench_analysis import register_analysis_report, analysis_delivery_status, verified_analysis_page
 from workbench_reporting import WorkbenchError, render_summary, verify_handoff
 
 
 _IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _SKILL_ROOT = Path(__file__).resolve().parents[1]
 
-_ALL_COMMANDS = {"analysis-page", "analysis-status", "render-analysis-report", "describe-acquire", "preview-acquire", "acquire", "continue-acquire", "import-run", "render-summary", "prepare-analysis", "publish-analysis", "prepare-generation", "publish-generation", "prepare-rewrite", "publish-rewrite", "verify"}
+_ALL_COMMANDS = {"analysis-page", "analysis-status", "register-analysis-report", "describe-acquire", "preview-acquire", "acquire", "continue-acquire", "import-run", "render-summary", "prepare-analysis", "publish-analysis", "prepare-generation", "publish-generation", "prepare-rewrite", "publish-rewrite", "verify"}
 _ALLOWED_COMMANDS = set(globals().get("_ALLOWED_COMMANDS", _ALL_COMMANDS))
 
 
@@ -521,7 +521,10 @@ def _verify_workbench_operation(analysis_dir: Path, status: Mapping[str, Any]) -
         checked = verify_analysis(analysis_dir)
     except WorkbenchError as exc:
         raise CliError(exc.error_code, str(exc)) from exc
-    return {"status": status["state"], "operation": "analysis", "verification": "passed", "checkedFiles": checked, "runId": status["runId"], "analysisId": status["analysisId"], "outputPath": str(analysis_dir)}
+    delivery = analysis_delivery_status(analysis_dir)
+    return {"status": status["state"], "operation": "analysis", "verification": "passed",
+            "deliveryStatus": delivery["deliveryStatus"], "reportVerified": delivery["reportVerified"],
+            "checkedFiles": checked, "runId": status["runId"], "analysisId": status["analysisId"], "outputPath": str(analysis_dir)}
 
 
 def _sha256_file(path: Path) -> str:
@@ -1115,13 +1118,16 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="short-video-script")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("analysis-page", "analysis-status", "render-analysis-report"):
+    for name in ("analysis-page", "analysis-status", "register-analysis-report"):
         if name not in _ALLOWED_COMMANDS:
             continue
         command = commands.add_parser(name)
         command.add_argument("--analysis-root", required=True, type=Path)
         if name == "analysis-page":
             command.add_argument("--page", required=True, type=int)
+        if name == "register-analysis-report":
+            command.add_argument("--revision")
+            command.add_argument("--format", choices=("html", "markdown", "text"))
 
     if "describe-acquire" in _ALLOWED_COMMANDS:
         commands.add_parser("describe-acquire", help="print machine-readable acquisition inputs and registered sort fields")
@@ -1201,7 +1207,7 @@ def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
     handlers = {
         "analysis-page": lambda a: verified_analysis_page(a.analysis_root, a.page),
         "analysis-status": lambda a: analysis_delivery_status(a.analysis_root),
-        "render-analysis-report": lambda a: render_analysis_delivery(a.analysis_root),
+        "register-analysis-report": lambda a: register_analysis_report(a.analysis_root, a.revision, a.format),
         "describe-acquire": _describe_acquire,
         "preview-acquire": _preview_acquire,
         "acquire": _acquire,
