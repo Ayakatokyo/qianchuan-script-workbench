@@ -91,31 +91,24 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         self.assertFalse(doc.find("details", **{"class": "evidence"}))
         self.assertFalse(any("hidden" in e["attrs"] for e in doc.find("article")))
 
-    def test_zero_and_absent_metrics_are_distinct_in_comparison(self):
+    def test_zero_and_absent_metrics_remain_in_single_material(self):
         doc = Document(self.render())
-        cells = doc.find("td", **{"data-metric": "cost"})
-        self.assertEqual([e["text"].strip() for e in cells], ["0", "未提供"])
-        self.assertIn("元", doc.find("thead")[0]["text"])
+        cards = doc.find("article", **{"class": "material-card"})
+        self.assertIn("0", cards[0]["text"])
+        self.assertIn("—", cards[1]["text"])
         self.assertIn("2026-09-01", doc.find("body")[0]["text"])
 
-    def test_leaderboard_defaults_use_available_meta_metric_columns_in_meta_order(self):
+    def test_full_report_rows_are_absent_from_html_while_detail_metrics_remain(self):
         summary = example()
         summary["leaderboard"] = {
-            "materials": [{"materialId": "m1", "materialName": "素材一", "metrics": {
-                "stat_cost_for_roi2": 9,
-                "total_order_settle_amount_for_roi2_1h": 3,
-                "stat_cost_for_overall_roi2": 7,
-                "total_prepay_and_pay_settle_roi2_1h": 2,
-            }}],
-            "metricDefinitions": {key: {"label": key, "group": "整体指标"} for key in (
-                "stat_cost_for_roi2", "total_order_settle_amount_for_roi2_1h",
-                "stat_cost_for_overall_roi2", "total_prepay_and_pay_settle_roi2_1h")},
+            "materials": [{"materialId": "m1", "materialName": "素材一", "metrics": {"cost": 123}},
+                          {"materialId": "full-only", "materialName": "仅全量素材", "metrics": {"cost": 456}}],
+            "metricDefinitions": {"cost": {"label": "费用", "group": "整体指标"}},
         }
         doc = Document(self.render(summary))
-        expected = ["stat_cost_for_overall_roi2", "total_prepay_and_pay_settle_roi2_1h",
-                    "total_order_settle_amount_for_roi2_1h"]
-        self.assertEqual([item["attrs"]["data-column"] for item in doc.find("th") if "data-column" in item["attrs"]], expected)
-        self.assertEqual(json.loads(doc.find("dialog")[0]["attrs"]["data-default-selection"]), expected)
+        self.assertNotIn("仅全量素材", doc.find("body")[0]["text"])
+        self.assertFalse(doc.find("table"))
+        self.assertTrue(doc.find("article", **{"class": "material-card"}))
         self.assertEqual(len(doc.find("a", **{"data-section": "quote-library"})), 1)
 
     def test_single_delivery_matches_meta_defaults_and_current_material_fields(self):
@@ -250,23 +243,15 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         self.assertIn("m1", doc.find("body")[0]["text"])
         self.assertIn("m2", doc.find("body")[0]["text"])
 
-    def test_workbench_sections_have_both_leaderboard_and_single_material_views(self):
+    def test_workbench_keeps_four_detail_sections_without_scope_or_leaderboard(self):
         doc = Document(self.render())
         panels = {e["attrs"].get("data-section-panel") for e in doc.elements if "data-section-panel" in e["attrs"]}
-        self.assertEqual(panels, {"filters", "materials", "scripts", "single-material", "quote-library"})
-        self.assertEqual(doc.find("div", id="scope-switch")[0]["attrs"]["aria-label"], "素材数据口径")
-        self.assertEqual([(button["attrs"]["data-scope"], button["text"], button["attrs"]["aria-pressed"])
-                          for button in doc.find("button") if "data-scope" in button["attrs"]],
-                         [("all", "全量素材", "true"), ("detail", "详情素材", "false")])
-        self.assertEqual({e["attrs"]["data-section"] for e in doc.find("a") if "data-detail-section" in e["attrs"]},
-                         {"scripts", "single-material", "quote-library"})
+        self.assertEqual(panels, {"filters", "scripts", "single-material", "quote-library"})
+        self.assertFalse(doc.find("div", id="scope-switch"))
+        self.assertFalse(doc.find("button", **{"data-scope": "all"}))
         self.assertTrue(doc.find("select", id="single-material-search") or doc.find("input", id="single-material-search"))
-        self.assertTrue(doc.find("button", id="next-page"))
-        self.assertTrue(doc.find("button", **{"data-sort-metric": "cost"}))
-        self.assertFalse(doc.find("select", id="status-filter"))
-        self.assertNotIn("脚本状态", doc.find("thead")[0]["text"])
-        self.assertNotIn("排名", doc.find("thead")[0]["text"])
-        self.assertEqual(len(doc.find("th")), 3)
+        self.assertFalse(doc.find("button", id="next-page"))
+        self.assertFalse(doc.find("button", **{"data-sort-metric": "cost"}))
 
     def test_formula_coverage_uses_verified_unique_materials_and_source_labels(self):
         summary = example()
@@ -302,115 +287,43 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         self.assertNotIn("999", doc.find("article")[0]["text"])
         self.assertNotIn("888", doc.find("article")[0]["text"])
 
-    def test_rendered_interactions_filter_sort_page_and_select_material(self):
+    def test_detail_navigation_and_selector_search(self):
         node = shutil.which("node")
         if not node:
             self.skipTest("Node.js unavailable for offline interaction execution")
-        summary = example()
-        original = summary["materials"][0]
-        summary["materials"] = []
-        for index in range(12):
-            item = deepcopy(original)
-            item.update(materialId=f"m{index}", materialName=f"中文素材{index}", rank=index + 1,
-                        metrics={"cost": index if index < 11 else None})
-            if index == 0:
-                item["materialName"] = "Café 全角Ａ素材"
-            item["script"]["text"] = f"正文专属关键词{index}"
-            if index == 10:
-                item["script"].update(deliveryStatus="identityMismatch", statusLabel="身份不一致", text=None, textAvailable=False)
-            summary["materials"].append(item)
-        summary["leaderboard"] = {"materials": [
-            {"materialId": item["materialId"], "materialName": item["materialName"], "metrics": item["metrics"]}
-            for item in summary["materials"]] + [
-            {"materialId": "full-only", "materialName": "未采集详情", "metrics": {"cost": None}}
-        ]}
-        doc = Document(self.render(summary))
-        self.assertEqual([row["attrs"]["data-detail-material"] for row in doc.find("tr", **{"class": "material-row"})],
-                         ["true"] * 12 + ["false"])
-        def descendants(parent, classes):
-            values = []
-            for element in doc.elements:
-                cursor = element.get("parent")
-                while cursor:
-                    if cursor is parent:
-                        if element["attrs"].get("class") in classes:
-                            values.append(element["text"])
-                        break
-                    cursor = cursor.get("parent")
-            return values
-        cards = [{"attrs": element["attrs"], "search": descendants(element, {"material-name", "material-id"})} for element in doc.find("article")]
-        rows = []
-        for row in doc.find("tr", **{"class": "material-row"}):
-            cells = [e for e in doc.elements if e.get("parent") is row and "data-metric" in e["attrs"]]
-            rows.append({"attrs": row["attrs"], "cells": [{"attrs": e["attrs"], "text": e["text"]} for e in cells]})
-        payload = {"cards": cards, "rows": rows, "elements": [{"attrs": e["attrs"], "text": e["text"]} for e in doc.elements if e["tag"] != "script"]}
+        from workbench_report_html import _SCRIPT
         runner = r"""
-const payload = PAYLOAD;
-function element(attrs = {}, text = "") {
-  const classes = new Set((attrs.class || "").split(" "));
-  const el = {attrs, dataset: {}, textContent: text, hidden: "hidden" in attrs, value: "", disabled: false,
-    classList: {toggle(name, on) {on ? classes.add(name) : classes.delete(name);}, contains(name) {return classes.has(name);}},
-    setAttribute(name, value) {this.attrs[name] = value;}, removeAttribute(name) {delete this.attrs[name];}};
-  for (const [key, value] of Object.entries(attrs)) if (key.startsWith("data-")) el.dataset[key.slice(5).replace(/-([a-z])/g, (_, char) => char.toUpperCase())] = value;
-  return el;
+function item(dataset = {}, textContent = "") {
+  const classes = new Set();
+  return {dataset, textContent, hidden:false, value:"", attrs:{},
+    classList:{toggle(name, on){on ? classes.add(name) : classes.delete(name);}, contains(name){return classes.has(name);}},
+    setAttribute(name,value){this.attrs[name]=value;}, removeAttribute(name){delete this.attrs[name];},
+    scrollIntoView(){this.scrolled=true;}};
 }
-const elements = payload.elements.map(item => element(item.attrs, item.text));
-const controls = new Map(elements.filter(item => item.attrs.id).map(item => [item.attrs.id, item]));
-const cards = payload.cards.map(item => {const el = element(item.attrs);el.querySelectorAll = () => item.search.map(textContent => ({textContent}));return el;});
-const rows = payload.rows.map(item => {const el = element(item.attrs);el.querySelectorAll = () => item.cells.map(cell => element(cell.attrs, cell.text));return el;});
-const nav = elements.filter(item => "section" in item.dataset);
-const panels = elements.filter(item => "sectionPanel" in item.dataset);
-const options = elements.filter(item => item.attrs.class === "material-option");
-const openers = elements.filter(item => "openMaterial" in item.dataset);
-const sortButtons = elements.filter(item => "sortMetric" in item.dataset);
-for (const button of sortButtons) {const marker={textContent:""};button.querySelector = () => marker;}
-let order = [];
-controls.get("material-rows").appendChild = row => {order = order.filter(item => item !== row);order.push(row);};
-const queries = {"[data-section-panel]":panels,"[data-section]":nav,"[data-detail-section]":nav.filter(link => "detailSection" in link.dataset),"[data-scope]":elements.filter(item => "scope" in item.dataset),".material-card":cards,".material-row":rows,".material-option":options,"[data-open-material]":openers,"[data-sort-metric]":sortButtons};
-global.document = {getElementById:id => controls.get(id),querySelectorAll:selector => queries[selector] || []};
+const panels = ["filters","scripts","single-material","quote-library"].map(sectionPanel => item({sectionPanel}));
+const nav = ["filters","scripts","single-material","quote-library"].map(section => item({section}));
+const cards = [item({index:"0"}),item({index:"1"})];
+const options = [item({openMaterial:"0"},"Café 素材 m0"),item({openMaterial:"1"},"中文素材 m1")];
+const library = item({libraryOpen:"1"});
+const controls = new Map([["single-material-search",item()],["selector-empty",item()],["selector-search",item()],
+  ["material-1",cards[1]]]);
+const queries = {"[data-section-panel]":panels,"[data-section]":nav,".material-card":cards,
+  ".material-option":options,"[data-open-material]":options,"[data-library-open]":[library]};
+global.document={getElementById:id=>controls.get(id),querySelectorAll:selector=>queries[selector]||[]};
+global.initMetricPicker=()=>{};
 SCRIPT
-const check = (value, message) => {if (!value) throw Error(message);};
-const visibleRows = () => order.filter(row => !row.hidden).map(row => Number(row.dataset.index));
-check(panels.find(panel => panel.dataset.sectionPanel === "filters").hidden === false, "Default section");
-check(rows.filter(row => !row.hidden).length === 10, "Initial ten rows");
-check(nav.filter(link => "detailSection" in link.dataset).every(link => link.hidden), "Full scope hides detail tabs");
-nav.find(link => link.dataset.section === "materials").onclick({preventDefault(){}});
-check(!panels.find(panel => panel.dataset.sectionPanel === "materials").hidden, "Full leaderboard opened");
-controls.get("next-page").onclick();
-check(JSON.stringify(visibleRows()) === "[10,11,12]", "Full scope includes uncollected report row");
-controls.get("scope-detail").onclick();
-check(controls.get("scope-detail").attrs["aria-pressed"] === "true" && controls.get("scope-all").attrs["aria-pressed"] === "false", "Detail scope selected");
-check(!panels.find(panel => panel.dataset.sectionPanel === "materials").hidden, "Switch retains leaderboard section");
-check(nav.filter(link => "detailSection" in link.dataset).every(link => !link.hidden), "Detail scope shows existing tabs");
-check(controls.get("materials-tab").textContent === "详情素材榜单", "Detail leaderboard label");
-controls.get("next-page").onclick();
-check(JSON.stringify(visibleRows()) === "[10,11]", "Detail scope includes only collected materials");
-controls.get("scope-all").onclick();
-check(controls.get("scope-all").attrs["aria-pressed"] === "true" && controls.get("scope-detail").attrs["aria-pressed"] === "false", "Full scope restored");
-check(!panels.find(panel => panel.dataset.sectionPanel === "materials").hidden, "Returning to full retains leaderboard section");
-controls.get("material-search").value = "ｃａｆé";controls.get("material-search").oninput();
-check(JSON.stringify(visibleRows()) === "[0]", "Unicode search");
-controls.get("material-search").value = "";controls.get("material-search").oninput();
-check(!controls.has("status-filter"), "No status control");
-controls.get("material-search").value = "正文专属关键词";controls.get("material-search").oninput();
-check(visibleRows().length === 0, "Title and ID search only");
-controls.get("material-search").value = "";controls.get("material-search").oninput();
-sortButtons.find(button => button.dataset.sortMetric === "cost").onclick();
-check(visibleRows()[0] === 0 && !visibleRows().includes(11), "Zero survives ascending and null-last sorting");
-sortButtons.find(button => button.dataset.sortMetric === "cost").onclick();
-check(visibleRows()[0] === 10 && !visibleRows().includes(11), "Descending and null-last sorting");
-openers.find(button => button.dataset.openMaterial === "4").onclick({preventDefault(){}});
-check(cards.filter(card => !card.hidden).length === 1 && !cards[4].hidden, "Single material selection");
-check(!panels.find(panel => panel.dataset.sectionPanel === "single-material").hidden, "Selection enters detail");
-check(controls.get("scope-detail").attrs["aria-pressed"] === "true", "Leaderboard link switches to detail scope");
-controls.get("single-material-search").value = "中文素材11";controls.get("single-material-search").oninput();
-check(options.filter(option => !option.hidden).length === 1 && !options[11].hidden, "Sidebar search");
-controls.get("scope-all").onclick();
-check(!panels.find(panel => panel.dataset.sectionPanel === "filters").hidden, "Returning to full scope shows shared filters");
-check(nav.filter(link => "detailSection" in link.dataset).every(link => link.hidden), "Returning to full hides detail tabs");
-controls.get("material-search").value = "不存在";controls.get("material-search").oninput();
-check(!controls.get("no-results").hidden && visibleRows().length === 0, "Empty search state");
-""".replace("PAYLOAD", json.dumps(payload, ensure_ascii=False)).replace("SCRIPT", doc.find("script")[0]["text"])
+const check=(value,message)=>{if(!value)throw Error(message);};
+check(!panels[0].hidden && panels[1].hidden,"filters open by default");
+nav[1].onclick({preventDefault(){}});
+check(!panels[1].hidden,"formula section opens");
+options[1].onclick({preventDefault(){}});
+check(!cards[1].hidden && cards[0].hidden && !panels[2].hidden,"detail script opens");
+controls.get("single-material-search").value="ｃａｆé";
+controls.get("single-material-search").oninput();
+check(!options[0].hidden && options[1].hidden,"Unicode selector search");
+library.onclick({preventDefault(){}});
+check(!cards[1].hidden && cards[1].scrolled,"quote returns to detail script");
+""".replace("SCRIPT", _SCRIPT)
         result = subprocess.run([node, "-e", runner], text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 

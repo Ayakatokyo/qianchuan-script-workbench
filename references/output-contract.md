@@ -11,7 +11,7 @@
 | 文件 | Schema / 含义 |
 | --- | --- |
 | `overview/summary-data.json` | `summary-data.schema.json`；计数、逐素材排名/指标、脚本与结构字段可用性、重复正文和缺口；新增可选leaderboard保存完整榜单、展示定义及快照来源哈希 |
-| `overview/index.html` | 默认脚本数据报告入口；右上角切换全量/详情素材；两种口径共用筛选和各自范围榜单，详情显示既有公式、单素材、片段库；标题/ID 搜索、指标排序、标签/关键词筛选、分页、完整可信正文及公式图表/原文联动 |
+| `overview/index.html` | 默认脚本数据报告入口；仅展示已采集详情素材的筛选条件、脚本内容公式、单素材脚本和脚本片段库；不提供素材口径切换或榜单；保留完整可信正文、单素材指标选择、公式图表/原文联动及片段搜索/跳转 |
 | `overview/report.md` | 可读报告；只呈现事实包已提供的周期、口径、原字段指标、脚本摘要与来源入口 |
 | `overview/receipt.json` | `summary-report-receipt.schema.json`；HTML/Markdown、结构数据和 source pack 的 SHA-256 |
 | `analysis-handoff.json` | `analysis-handoff.schema.json`；runId、事实包与报告路径/哈希、选材范围、字段可用性、缺口和等待状态 |
@@ -21,7 +21,7 @@
 
 ### HTML 展示口径
 
-素材榜单只按标题或 ID 搜索；固定首列“素材名称”展示单行省略的名称和下方 ID。全量口径覆盖本次完整报表全部素材，详情口径只显示与本次脚本采集素材 ID 对应的榜单行；两边沿用同一套筛选、排序、自定义指标和分页控件，不设置独立排名列或脚本状态列/筛选。榜单默认指标按千川元技能顺序取本次快照实际返回的 `stat_cost_for_overall_roi2`、`total_prepay_and_pay_settle_roi2_1h`、`total_order_settle_amount_for_roi2_1h`；这些字段全缺时回退前六项可用指标。元技能的时长、创建时间和来源未进入已核验摘要时不补造。自定义指标弹窗按分组与搜索提供本次快照实际返回的全部指标，可勾选、移除、上下移动顺序、全选/清空、恢复默认，确定生效、取消不改当前列。点击指标按升序、降序、恢复原序切换，缺失指标不补零；显示平台ValueStr（含百分比、千分位和“-”），排序使用对应Value，缺失/“-”置后；上方展示总条数，页脚展示当前范围及首页/上一页/页码/下一页/尾页，每页 10 条。全榜只有采集素材链接到对应脚本；公式、片段、单素材与分析交接仍使用原TopN。单素材页保留左侧素材列表、名称/ID/排名、“投放数据”、内容公式与完整正文，不展示平台原始结构、身份来源折叠区或已核验徽标。“投放数据”优先展示与千川元技能相同的八项默认指标中本素材实际返回的字段：`stat_cost_for_overall_roi2`、`stat_cost_for_roi2`、`total_pay_order_count_for_roi2`、`total_order_settle_amount_for_roi2_1h`、`total_prepay_and_pay_settle_roi2_1h`、`live_show_count_for_roi2_v2`、`live_watch_count_for_roi2_v2`、`live_cvr_rate_for_roi2_v2`；八项均未返回时展示前八项可用指标。其余实际返回字段在同一自定义指标弹窗中可选，当前素材选择不影响其他素材或榜单。卡片优先使用 ValueStr，缺失值显示“—”；无 ValueStr 的数值采用千分位、最多四位小数。
+第一阶段 HTML 不展示全量或详情素材榜单，也不展示榜单的指标弹窗、搜索、排序和分页。完整报表快照及 `summary-data.json.leaderboard` 继续保存并校验；TopN 详情素材范围与第二阶段交接不变。单素材页保留左侧素材列表、名称/ID/排名、“投放数据”、内容公式与完整正文，不展示平台原始结构、身份来源折叠区或已核验徽标。“投放数据”优先展示与千川元技能相同的八项默认指标中本素材实际返回的字段：`stat_cost_for_overall_roi2`、`stat_cost_for_roi2`、`total_pay_order_count_for_roi2`、`total_order_settle_amount_for_roi2_1h`、`total_prepay_and_pay_settle_roi2_1h`、`live_show_count_for_roi2_v2`、`live_watch_count_for_roi2_v2`、`live_cvr_rate_for_roi2_v2`；八项均未返回时展示前八项可用指标。其余实际返回字段可按当前素材独立选择。卡片优先使用 ValueStr，缺失值显示“—”；无 ValueStr 的数值采用千分位、最多四位小数。
 
 脚本内容公式仅使用平台显式返回的可读标签。一级竖向柱状图按素材 ID 去重计数，覆盖率分母为有可读一级公式的素材数；点击一级后展示其二级环图和可交互图例，二者同步高亮、再次点击取消，切换一级或收起时清除二级选择。二级覆盖率分母是当前一级覆盖的素材数；环图面积按二级标签覆盖计数之和归一，同一素材可包含多个标签，不将环图面积解释成互斥素材占比。
 

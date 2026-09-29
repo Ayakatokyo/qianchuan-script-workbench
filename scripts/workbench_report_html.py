@@ -12,7 +12,7 @@ from typing import Any, Mapping
 
 from workbench_formula_overview import render_formula_overview, CSS as FORMULA_CSS, SCRIPT as FORMULA_SCRIPT
 from workbench_script_interactions import render_linked_script, CSS as LINKED_CSS, SCRIPT as LINKED_SCRIPT
-from workbench_metric_picker import (render_picker, default_columns, default_single_columns,
+from workbench_metric_picker import (render_picker, default_single_columns,
                                      CSS as METRIC_CSS, SCRIPT as METRIC_SCRIPT)
 from workbench_quote_library import render_quote_library, CSS as LIBRARY_CSS, SCRIPT as LIBRARY_SCRIPT
 
@@ -171,8 +171,7 @@ _STYLE = """
 .single-material-main .material-card{padding:0;border:0;box-shadow:none}.single-material-main .single-block{scroll-margin-top:74px;padding:16px 0 22px;margin:0;border-top:0;border-bottom:1px solid var(--line)}
 .single-material-main .single-block:last-child{border-bottom:0}.single-material-selector{top:16px;max-height:calc(100vh - 32px)}
 @media(max-width:760px){.single-material-main{padding:16px}.single-material-selector{max-height:320px}}
-.report-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}.report-heading>div{min-width:0}.scope-switch{display:flex;gap:10px;flex:none}.scope-switch button{width:150px;height:54px;padding:0 12px;border-color:var(--accent);border-radius:9px;background:#fff;color:var(--accent);font-size:16px;font-weight:650;line-height:1.3}.scope-switch button:hover:not(:disabled){border-color:#1d4ed8;background:var(--accent-soft);color:var(--accent)}.scope-switch button.active{background:var(--accent);color:#fff}.scope-switch button.active:hover:not(:disabled){border-color:#1d4ed8;background:#1d4ed8;color:#fff}.scope-switch button:focus-visible{outline-color:var(--accent)}
-@media(max-width:760px){.report-heading{flex-direction:column;gap:0}.scope-switch{width:100%;margin-bottom:16px}.scope-switch button{flex:1;width:auto;min-width:0}}
+.report-heading{display:flex;align-items:center;margin-bottom:18px}
 """
 
 _SCRIPT = """
@@ -182,15 +181,9 @@ _SCRIPT = """
   const panels = all("[data-section-panel]");
   const nav = all("[data-section]");
   const cards = all(".material-card");
-  const rows = all(".material-row");
   const options = all(".material-option");
-  const scopeButtons = all("[data-scope]");
   const normalize = value => String(value || "").normalize("NFKC").toLocaleLowerCase().trim();
-  const searchable = new Map(rows.map(row => [row.dataset.index, normalize(row.dataset.search)]));
-  const pageSize = 10;
-  let page = 1, sortMetric = null, direction = 0, scope = "all", currentSection = "filters";
   function showSection(name) {
-    currentSection = name;
     panels.forEach(panel => { panel.hidden = panel.dataset.sectionPanel !== name; });
     nav.forEach(link => {
       const active = link.dataset.section === name;
@@ -205,90 +198,26 @@ _SCRIPT = """
       option.classList.toggle("active", selected);
       option.setAttribute("aria-pressed", String(selected));
     });
-    if (navigate) { setScope("detail"); showSection("single-material"); }
-  }
-  function metricValue(row) {
-    const cell = Array.from(row.querySelectorAll("[data-metric]")).find(item => item.dataset.metric === sortMetric);
-    const text = cell ? String(cell.dataset.sortValue ?? cell.textContent).trim().replace(/,/g, "") : "";
-    if (!text || !/^[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:e[+-]?\\d+)?$/i.test(text)) return null;
-    const value = Number(text);
-    return Number.isFinite(value) ? value : null;
-  }
-  function updateTable() {
-    const query = normalize(byId("material-search").value);
-    const matching = rows.filter(row => (scope === "all" || row.dataset.detailMaterial === "true")
-      && (!query || (searchable.get(row.dataset.index) || "").includes(query)));
-    if (sortMetric && direction) matching.sort((a, b) => {
-      const av = metricValue(a), bv = metricValue(b);
-      if (av === null || bv === null) return av === bv ? Number(a.dataset.index) - Number(b.dataset.index) : av === null ? 1 : -1;
-      return (av - bv) * direction || Number(a.dataset.index) - Number(b.dataset.index);
-    });
-    const pageCount = Math.max(1, Math.ceil(matching.length / pageSize));
-    page = Math.max(1, Math.min(page, pageCount));
-    rows.forEach(row => { row.hidden = true; });
-    const visible = matching.slice((page - 1) * pageSize, page * pageSize);
-    visible.forEach(row => { row.hidden = false; byId("material-rows").appendChild(row); });
-    byId("visible-count").textContent = `共 ${matching.length} 条`;
-    byId("table-range").textContent = matching.length ? `显示 ${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, matching.length)} / ${matching.length}` : "暂无记录";
-    byId("page-number").textContent = `${page} / ${pageCount}`;
-    byId("first-page").disabled = byId("previous-page").disabled = page <= 1;
-    byId("next-page").disabled = byId("last-page").disabled = page >= pageCount;
-    byId("no-results").hidden = matching.length > 0;
-    all("[data-sort-metric]").forEach(button => {
-      const active = button.dataset.sortMetric === sortMetric && direction !== 0;
-      button.setAttribute("aria-label", button.dataset.label + (active ? direction > 0 ? "，升序" : "，降序" : "，点击排序"));
-      button.querySelector(".sort-mark").textContent = active ? direction > 0 ? " ↑" : " ↓" : "";
-    });
-  }
-  function setScope(next) {
-    scope = next;
-    const detail = scope === "detail";
-    scopeButtons.forEach(button => {
-      const active = button.dataset.scope === scope;
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-pressed", String(active));
-    });
-    all("[data-detail-section]").forEach(link => { link.hidden = !detail; });
-    byId("materials-tab").textContent = detail ? "详情素材榜单" : "全量素材榜单";
-    byId("material-table").setAttribute("aria-label", detail ? "详情素材榜单" : "全量素材榜单");
-    if (!detail && !["filters", "materials"].includes(currentSection)) currentSection = "filters";
-    page = 1;
-    updateTable();
-    showSection(currentSection);
+    if (navigate) showSection("single-material");
   }
   nav.forEach(link => { link.onclick = event => { event.preventDefault(); showSection(link.dataset.section); }; });
-  scopeButtons.forEach(button => { button.onclick = () => setScope(button.dataset.scope); });
-  all("[data-open-material]").forEach(button => { button.onclick = event => { event.preventDefault(); selectMaterial(button.dataset.openMaterial, true); }; });
+  all("[data-open-material]").forEach(button => { button.onclick = event => {
+    event.preventDefault(); selectMaterial(button.dataset.openMaterial, true);
+  }; });
   all("[data-library-open]").forEach(link => { link.onclick = event => {
     event.preventDefault(); selectMaterial(link.dataset.libraryOpen, true);
     const card = byId("material-" + link.dataset.libraryOpen);
     if (card) card.scrollIntoView({behavior:"smooth", block:"start"});
   }; });
-  byId("material-search").oninput = () => { page = 1; updateTable(); };
-  function bindSorting() { all("[data-sort-metric]").forEach(button => { button.onclick = () => {
-    direction = sortMetric !== button.dataset.sortMetric ? 1 : direction === 1 ? -1 : direction === -1 ? 0 : 1;
-    sortMetric = button.dataset.sortMetric; page = 1; updateTable();
-  }; }); }
-  bindSorting();
-  initMetricPicker(rows, cards, active => {
-    if (!active.includes(sortMetric)) { sortMetric = null; direction = 0; }
-    bindSorting(); page = 1; updateTable();
-  });
-  byId("first-page").onclick = () => { page = 1; updateTable(); };
-  byId("previous-page").onclick = () => { page -= 1; updateTable(); };
-  byId("next-page").onclick = () => { page += 1; updateTable(); };
-  byId("last-page").onclick = () => { page = Number.MAX_SAFE_INTEGER; updateTable(); };
   byId("single-material-search").oninput = () => {
     const query = normalize(byId("single-material-search").value);
     options.forEach(option => { option.hidden = !normalize(option.textContent).includes(query); });
     byId("selector-empty").hidden = options.some(option => !option.hidden);
   };
-  byId("report-controls").hidden = false;
-  byId("table-pager").hidden = false;
+  initMetricPicker([], cards, () => {});
   byId("selector-search").hidden = false;
-  byId("scope-switch").hidden = false;
   if (cards.length) selectMaterial(cards[0].dataset.index, false);
-  setScope("all");
+  showSection("filters");
 })();
 """
 
@@ -300,10 +229,6 @@ def render_html(summary: Mapping[str, Any]) -> str:
     ranking = selection.get('rankingMetric') or {}
     leaderboard = summary.get('leaderboard') or {}
     leaderboard_materials = leaderboard.get('materials', materials)
-    table_summary = {**summary, 'metricDefinitions': leaderboard.get('metricDefinitions', summary.get('metricDefinitions', {}))}
-    all_columns = _metric_columns(table_summary, leaderboard_materials)
-    columns = default_columns(all_columns)
-    material_indexes = {str(item.get('materialId')): index for index, item in enumerate(materials)}
     report_materials_by_id = {str(item.get('materialId')): item for item in leaderboard_materials}
     script_sources = [{**item, 'metrics': {**(item.get('metrics') or {}),
                        **(report_materials_by_id.get(str(item.get('materialId'))) or {}).get('metrics', {})}}
@@ -314,56 +239,20 @@ def render_html(summary: Mapping[str, Any]) -> str:
     parts = ['<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">',
              '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; script-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">',
              '<title>千川素材脚本数据工作台</title><style>' + _STYLE + FORMULA_CSS + LINKED_CSS + LIBRARY_CSS + METRIC_CSS + '</style></head><body><main>',
-             '<header class="report-heading"><div><h1>千川素材脚本数据工作台</h1>',
-             '</div>',
-             '<div id="scope-switch" class="scope-switch" role="group" aria-label="素材数据口径" hidden><button type="button" id="scope-all" data-scope="all" class="active" aria-pressed="true">全量素材</button><button type="button" id="scope-detail" data-scope="detail" aria-pressed="false">详情素材</button></div></header>']
+             '<header class="report-heading"><h1>千川素材脚本数据工作台</h1></header>']
     parts.append('<nav class="section-nav" aria-label="报告部分">')
-    for key, label in [('filters', '素材筛选条件'), ('materials', '素材榜单'), ('scripts', '脚本内容公式'), ('single-material', '单素材脚本'), ('quote-library', '脚本片段库')]:
-        detail_only = ' data-detail-section' if key in {'scripts', 'single-material', 'quote-library'} else ''
-        tab_id = ' id="materials-tab"' if key == 'materials' else ''
-        parts.append(f'<a href="#{key}-panel" data-section="{key}"{detail_only}{tab_id}>{"全量素材榜单" if key == "materials" else label}</a>')
+    for key, label in [('filters', '素材筛选条件'), ('scripts', '脚本内容公式'), ('single-material', '单素材脚本'), ('quote-library', '脚本片段库')]:
+        parts.append(f'<a href="#{key}-panel" data-section="{key}">{label}</a>')
     parts.append('</nav><noscript><p class="quality-alert">浏览器未启用 JavaScript，已展开全部报告分区与素材，仍可阅读全部报告内容。</p></noscript>')
     parts.append('<section id="filters-panel" class="panel" data-section-panel="filters"><h2>素材筛选条件</h2><div class="filter-config-layout"><div class="filter-config-column"><h3>素材列表筛选条件</h3><p class="filter-config-note">仅展示本次实际取数的范围。</p><dl class="context">')
-    for label, value in [('开始日期', period.get('startDate')), ('结束日期', period.get('endDate')), ('完整报表行数', counts.get('reportRows')), ('入选素材数', counts.get('selectedMaterials'))]:
+    for label, value in [('开始日期', period.get('startDate')), ('结束日期', period.get('endDate')), ('入选素材数', counts.get('selectedMaterials'))]:
         parts.append(f'<div><dt>{label}</dt><dd>{_e(value)}</dd></div>')
     parts.append('</dl></div><div class="filter-config-column"><h3>脚本素材选取</h3><p class="filter-config-note">仅展示本次实际影响脚本素材入选与排序的条件。</p><dl class="context">')
     direction = {'asc': '升序', 'desc': '降序'}.get(selection.get('direction'), selection.get('direction'))
     for label, value in [('排序指标', ranking.get('label') or selection.get('rankingLabel') or selection.get('rankingField')), ('排序方向', direction), ('详情素材数 TopN', selection.get('topN')), ('指标单位', ranking.get('unit'))]:
         parts.append(f'<div><dt>{label}</dt><dd>{_e(value)}</dd></div>')
     parts.append('</dl></div></div></section>')
-    parts.append('<section id="materials-panel" data-section-panel="materials"><div class="toolbar" id="report-controls" hidden><input id="material-search" type="search" placeholder="输入素材标题或 ID" aria-label="输入素材标题或 ID"><button type="button" id="metric-button" aria-haspopup="dialog" aria-expanded="false">自定义指标</button></div>')
-    parts.append(f'<p class="summary" id="visible-count">共 {len(leaderboard_materials)} 条</p><div class="table-wrap"><table id="material-table" aria-label="素材榜单"><thead><tr id="material-header"><th scope="col" class="material-name-column">素材名称</th>')
-    for column in columns:
-        unit = f'（{_e(column["unit"])}）' if column['unit'] else ''
-        parts.append(f'<th scope="col" data-column="{_e(column["key"])}"><button type="button" data-sort-metric="{_e(column["key"])}" data-label="{_e(column["label"])}">{_e(column["label"])}{unit}<span class="sort-mark"></span></button></th>')
-    parts.append('</tr></thead><tbody id="material-rows">')
-    for index, material in enumerate(leaderboard_materials):
-        title = _e(material.get("materialName") or "素材名称未提供")
-        material_id = str(material.get("materialId") or "")
-        detail_index = material_indexes.get(material_id)
-        metrics = material.get("metrics") or {}
-        displays = material.get("metricDisplay") or metrics
-        values = [[None if displays.get(c['key']) in ('-', '--', '') else metrics.get(c['key']), displays.get(c['key'])] for c in all_columns]
-        data_values = escape(json.dumps(values, ensure_ascii=False, separators=(',', ':')), quote=True)
-        search_text = _e((material.get("materialName") or "") + " " + material_id)
-        detail_marker = 'true' if detail_index is not None else 'false'
-        parts.append(f'<tr class="material-row" data-index="{index}" data-detail-material="{detail_marker}" data-search="{search_text}" data-values="{data_values}"><td class="material-name-column">')
-        if detail_index is not None:
-            parts.append(f'<a class="material-title" href="#material-{detail_index}" data-open-material="{detail_index}" title="{title}">{title}</a>')
-        else:
-            parts.append(f'<span class="material-title" title="{title}">{title}</span>')
-        parts.append(f'<div class="table-material-id">素材 ID：{_e(material_id)}</div></td>')
-        for column in columns:
-            key = column['key']
-            raw = metrics.get(key)
-            sort_value = '' if raw is None or displays.get(key) in ('-', '--', '') else str(raw)
-            parts.append(f'<td data-metric="{_e(key)}" data-sort-value="{escape(sort_value, quote=True)}">{_e(displays.get(key))}</td>')
-        parts.append('</tr>')
-    parts.append('</tbody></table></div>')
-    if not leaderboard_materials:
-        parts.append('<div class="empty">暂无素材数据。</div>')
-    parts.append('<div class="empty" id="no-results" hidden>没有匹配素材。</div><div class="pager" id="table-pager" hidden><span id="table-range"></span><div><button type="button" id="first-page">首页</button><button type="button" id="previous-page">上一页</button><span id="page-number"></span><button type="button" id="next-page">下一页</button><button type="button" id="last-page">尾页</button></div></div></section>')
-    parts.append(render_picker(all_columns, columns, script_columns))
+    parts.append(render_picker([], [], script_columns))
     parts.append('<section id="scripts-panel" data-section-panel="scripts">' + _formula_overview(materials) + '</section>')
     parts.append('<section id="single-material-panel" data-section-panel="single-material"><div class="single-material-shell"><aside class="single-material-selector"><h2>单素材脚本</h2><label id="selector-search" hidden>查找素材<input type="search" id="single-material-search" placeholder="搜索名称或 ID"></label>')
     for index, material in enumerate(materials):

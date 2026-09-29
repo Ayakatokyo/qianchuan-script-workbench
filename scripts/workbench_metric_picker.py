@@ -203,8 +203,7 @@ function initMetricPicker(rows, cards, onApply) {
       : '素材名称为固定列，其他列按自定义指标顺序排列';
     refresh(); dialog.showModal(); button.setAttribute('aria-expanded', 'true'); search.focus();
   }
-  $('metric-button').onclick = () => { open($('metric-button'), null);
-  };
+  if ($('metric-button')) $('metric-button').onclick = () => open($('metric-button'), null);
   cards.forEach(card => {
     if (typeof card.querySelector !== 'function') return;
     const button = card.querySelector('[data-single-metric-button]');
