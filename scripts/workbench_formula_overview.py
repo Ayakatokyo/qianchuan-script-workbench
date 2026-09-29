@@ -72,7 +72,6 @@ def render_formula_overview(
     buckets = sorted(primary.items(), key=lambda item: (-len(item[1]), item[0]))
     denominator = len(labeled)
     parts = ['<div class="workbench-formula-overview" data-workbench-formula>',
-             f'<p class="formula-coverage-note">{denominator} 个素材的内容公式 · 按素材计数</p>',
              '<section class="script-formula-card"><div class="script-card-header"><h3>一级内容公式</h3>',
              '<span class="script-card-hint">点击一级内容公式柱状图可以显示二级内容公式分布</span></div>']
     if not buckets:
@@ -118,7 +117,7 @@ def render_formula_overview(
             count = len(child_ids)
             description = f'{child}，覆盖 {count} 个素材，占当前一级覆盖素材 {_percentage(count, total)}'
             parts.append(f'<button type="button" class="formula-legend-item" data-formula-secondary-index="{index}" aria-pressed="false" aria-label="{_e(description)}"><span class="formula-legend-swatch" style="background:{_COLORS[index % len(_COLORS)]}"></span><span>{_e(child)}<span class="formula-legend-detail">{count} 个素材 · {_percentage(count, total)}</span></span></button>')
-        parts.append(f'</div></div><p class="formula-coverage-note">覆盖比例以当前一级的 {total} 个素材为分母；同一素材可包含多个二级标签。环图面积按二级标签出现数之和（{occurrence_total}）归一，不代表互斥素材占比。</p></section>')
+        parts.append('</div></div></section>')
     parts.append('</div>')
     return ''.join(parts)
 

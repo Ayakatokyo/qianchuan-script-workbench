@@ -59,7 +59,7 @@ class FormulaOverviewTests(unittest.TestCase):
         self.assertEqual(len(segments), 2)
         for segment in segments:
             self.assertAlmostEqual(float(segment['attrs']['data-formula-angle-size']), math.pi, places=5)
-        self.assertIn('环图面积', cards[0]['text'])
+        self.assertNotIn('环图面积', cards[0]['text'])
 
     def test_no_javascript_keeps_every_secondary_statistic_readable(self):
         doc = Document(self.render())
