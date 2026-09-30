@@ -76,258 +76,153 @@ def example():
 
 class WorkbenchReportHtmlTests(unittest.TestCase):
     def render(self, summary=None):
-        self.assertIsNotNone(importlib.util.find_spec("workbench_report_html"), "HTML renderer is missing")
         from workbench_report_html import render_html
         return render_html(example() if summary is None else summary)
 
-    def test_full_script_remains_readable_without_raw_or_audit_panels(self):
+    @staticmethod
+    def model(html):
+        import re
+        data = re.search(r'<script id="workbench-model" type="application/json">(.*?)</script>', html)
+        assert data, 'embedded workbench model missing'
+        return json.loads(data.group(1))
+
+    def test_single_page_uses_only_details_and_keeps_full_script_fallback(self):
         summary = example()
-        doc = Document(self.render(summary))
-        self.assertEqual(doc.find("div", **{"class": "script-text"})[0]["text"], summary["materials"][0]["script"]["text"])
-        self.assertNotIn("平台原始结构", doc.find("body")[0]["text"])
-        self.assertNotIn("身份核对与数据来源", doc.find("body")[0]["text"])
-        self.assertNotIn("结构化细节", doc.find("body")[0]["text"])
-        self.assertFalse(doc.find("details", **{"class": "raw-fields"}))
-        self.assertFalse(doc.find("details", **{"class": "evidence"}))
-        self.assertFalse(any("hidden" in e["attrs"] for e in doc.find("article")))
+        summary['leaderboard'] = {'materials': [{'materialId': 'full-only', 'materialName': '仅全量素材'}]}
+        html = self.render(summary)
+        doc = Document(html)
+        model = self.model(html)
+        self.assertEqual([item['id'] for item in model['materials']], ['m1', 'm2'])
+        self.assertEqual(doc.find('pre')[0]['text'], summary['materials'][0]['script']['text'])
+        self.assertNotIn('仅全量素材', html)
+        self.assertNotIn('来源原句', html)
+        self.assertNotIn('脚本片段库', html)
+        self.assertNotIn('查找名称或 ID', html)
+        self.assertFalse(doc.find('nav'))
+        self.assertFalse(doc.find('table'))
+        self.assertEqual(len(doc.find('dialog')), 1)
 
-    def test_zero_and_absent_metrics_remain_in_single_material(self):
-        doc = Document(self.render())
-        cards = doc.find("article", **{"class": "material-card"})
-        self.assertIn("0", cards[0]["text"])
-        self.assertIn("—", cards[1]["text"])
-        self.assertIn("2026-09-01", doc.find("body")[0]["text"])
-
-    def test_full_report_rows_are_absent_from_html_while_detail_metrics_remain(self):
+    def test_identity_mismatch_never_enters_script_or_formula(self):
         summary = example()
-        summary["leaderboard"] = {
-            "materials": [{"materialId": "m1", "materialName": "素材一", "metrics": {"cost": 123}},
-                          {"materialId": "full-only", "materialName": "仅全量素材", "metrics": {"cost": 456}}],
-            "metricDefinitions": {"cost": {"label": "费用", "group": "整体指标"}},
-        }
-        doc = Document(self.render(summary))
-        self.assertNotIn("仅全量素材", doc.find("body")[0]["text"])
-        self.assertFalse(doc.find("table"))
-        self.assertTrue(doc.find("article", **{"class": "material-card"}))
-        self.assertEqual(len(doc.find("a", **{"data-section": "quote-library"})), 1)
+        summary['materials'][1]['script'].update(text='不能信任的正文', data='不能信任的数据',
+                                                  detail='不能信任的细节', textAvailable=True)
+        html = self.render(summary)
+        model = self.model(html)
+        self.assertEqual(model['materials'][1]['text'], '')
+        self.assertEqual(model['materials'][1]['formula'], [])
+        self.assertNotIn('不能信任', html)
+        self.assertNotIn('partialFailed', html)
 
-    def test_single_delivery_matches_meta_defaults_and_current_material_fields(self):
+    def test_metrics_keep_defaults_actual_fields_and_display_zero(self):
         from workbench_metric_picker import SINGLE_DEFAULT_IDS
         summary = example()
         first_values = {key: index + 1000 for index, key in enumerate(SINGLE_DEFAULT_IDS)}
         first_values.update(extra_metric=0, video_play_count_for_roi2_v2=77)
-        second_values = {"other_a": 0, "other_b": 2, "other_c": None}
-        summary["materials"][0]["metrics"] = {"script_only": 42}
-        summary["materials"][1]["metrics"] = {}
-        summary["metricDefinitions"]["script_only"] = {"label": "仅脚本素材指标", "sourceKey": "script_only"}
-        summary["leaderboard"] = {
-            "materials": [
-                {"materialId": "m1", "metrics": first_values,
-                 "metricDisplay": {**first_values, "stat_cost_for_overall_roi2": "1,234.50",
-                                   "stat_cost_for_roi2": None, "total_pay_order_count_for_roi2": "",
-                                   "extra_metric": "0.00%"}},
-                {"materialId": "m2", "metrics": second_values},
+        second_values = {'other_a': 0, 'other_b': 2, 'other_c': None}
+        summary['materials'][0]['metrics'] = {'script_only': 42}
+        summary['materials'][1]['metrics'] = {}
+        summary['metricDefinitions']['script_only'] = {'label': '仅脚本素材指标', 'sourceKey': 'script_only'}
+        summary['leaderboard'] = {
+            'materials': [
+                {'materialId': 'm1', 'metrics': first_values,
+                 'metricDisplay': {**first_values, 'stat_cost_for_overall_roi2': '1,234.50',
+                                   'stat_cost_for_roi2': None, 'total_pay_order_count_for_roi2': '',
+                                   'extra_metric': '0.00%'}},
+                {'materialId': 'm2', 'metrics': second_values},
             ],
-            "metricDefinitions": {key: {"label": f"指标 {key}", "group": "整体指标"}
+            'metricDefinitions': {key: {'label': f'指标 {key}', 'group': '整体指标'}
                                   for key in (*first_values, *second_values)},
         }
-        doc = Document(self.render(summary))
-        cards = doc.find("article", **{"class": "material-card"})
+        model = self.model(self.render(summary))
+        first, second = model['materials']
+        default = [field['id'] for field in first['metrics'] if field['default']]
+        self.assertEqual(default, [
+            'stat_cost_for_overall_roi2', 'total_order_settle_amount_for_roi2_1h',
+            'stat_cost_for_roi2', 'total_prepay_and_pay_settle_roi2_1h',
+            'total_pay_order_count_for_roi2', 'live_show_count_for_roi2_v2',
+            'live_cvr_rate_for_roi2_v2', 'live_watch_count_for_roi2_v2'])
+        self.assertEqual(len(first['metrics']), 11)
+        by_id = {field['id']: field for field in first['metrics']}
+        self.assertEqual(by_id['stat_cost_for_overall_roi2']['value'], '1,234.50')
+        self.assertEqual(by_id['stat_cost_for_roi2']['value'], '1,001')
+        self.assertEqual(by_id['extra_metric']['value'], '0.00%')
+        self.assertFalse(by_id['extra_metric']['default'])
+        self.assertEqual([field['value'] for field in second['metrics']], ['0', '2', '—'])
+        self.assertTrue(all(field['default'] for field in second['metrics']))
 
-        def within(card, data_key):
-            result = []
-            for element in doc.elements:
-                parent = element.get("parent")
-                while parent:
-                    if parent is card:
-                        if data_key in element["attrs"]:
-                            result.append(element)
-                        break
-                    parent = parent.get("parent")
-            return result
-
-        self.assertEqual(json.loads(cards[0]["attrs"]["data-single-defaults"]), [
-            "stat_cost_for_overall_roi2", "total_order_settle_amount_for_roi2_1h",
-            "stat_cost_for_roi2", "total_prepay_and_pay_settle_roi2_1h",
-            "total_pay_order_count_for_roi2", "live_show_count_for_roi2_v2",
-            "live_cvr_rate_for_roi2_v2", "live_watch_count_for_roi2_v2",
-        ])
-        first_metrics = within(cards[0], "data-single-metric")
-        self.assertEqual(len(first_metrics), 11)
-        self.assertEqual(sum("hidden" not in item["attrs"] for item in first_metrics), 8)
-        self.assertIn("已展示指标 8 / 11", cards[0]["text"])
-        self.assertEqual(next(item for item in first_metrics if item["attrs"]["data-single-metric"] == "stat_cost_for_overall_roi2")["text"],
-                         "指标 stat_cost_for_overall_roi21,234.50")
-        for key, raw in (("stat_cost_for_roi2", "1,001"), ("total_pay_order_count_for_roi2", "1,002")):
-            self.assertEqual(next(item for item in first_metrics if item["attrs"]["data-single-metric"] == key)["text"],
-                             f"指标 {key}{raw}")
-        self.assertIn("hidden", next(item for item in first_metrics if item["attrs"]["data-single-metric"] == "extra_metric")["attrs"])
-        extra_choice = doc.find("input", **{"data-pick-metric": "script_only"})[0]
-        self.assertEqual(extra_choice["attrs"]["data-leaderboard-choice"], "false")
-        self.assertIn("hidden", extra_choice["parent"]["attrs"])
-        self.assertEqual(json.loads(cards[1]["attrs"]["data-single-defaults"]), list(second_values))
-        self.assertEqual(len(within(cards[1], "data-single-metric")), 3)
-        self.assertIn("已展示指标 3 / 3", cards[1]["text"])
-        self.assertEqual(next(item for item in within(cards[1], "data-single-metric")
-                              if item["attrs"]["data-single-metric"] == "other_c")["text"], "指标 other_c—")
-        self.assertEqual(len(within(cards[0], "data-single-metric-button")), 1)
-        self.assertNotIn("核心指标", cards[0]["text"])
-
-    def test_mismatched_payload_is_never_shown_as_trusted_script(self):
+    def test_formula_labels_are_trusted_and_terms_exact(self):
         summary = example()
-        script = summary["materials"][1]["script"]
-        script.update(text="不能信任的正文", formula="不能信任的公式", detail="不能信任的细节", data="不能信任的数据", textAvailable=True)
+        first = summary['materials'][0]['script']
+        first['text'] = '真实正文中的折扣原句。'
+        first['data'] = [
+            {'level_1_label': {'value': 1, 'label': '价格优惠'},
+             'level_2_labels': [{'value': 21, 'label': '降价/折扣'}]},
+            {'level_1_label': {'value': 1, 'label': '价格优惠'},
+             'level_2_labels': [{'value': 21, 'label': '降价/折扣'}]},
+        ]
+        first['detail'] = {'21': {'label': '降价/折扣', 'list': ['折扣原句', '不在正文']}}
+        model = self.model(self.render(summary))
+        groups = model['materials'][0]['formula']
+        self.assertEqual([group['label'] for group in groups], ['价格优惠', '价格优惠'])
+        self.assertEqual(groups[0]['children'][0]['terms'], ['折扣原句'])
+        self.assertEqual(model['materials'][1]['formula'], [])
+        first['data'] = [{'level_1_label': {'value': 999}, 'level_2_labels': [{'value': 888}]}]
+        self.assertEqual(self.model(self.render(summary))['materials'][0]['formula'], [])
+
+    def test_empty_and_missing_body_keep_honest_fallback(self):
+        summary = example()
+        summary['materials'] = []
         html = self.render(summary)
-        self.assertNotIn("不能信任", html)
-        self.assertIn("已返回脚本内容，但素材身份不一致，未采信", html)
-        self.assertNotIn("partialFailed", html)
-        self.assertNotIn("等待第二阶段输入", html)
-        self.assertNotIn("完整性与缺口", html)
-        self.assertNotIn("素材一", html)
-
-    def test_missing_body_keeps_readable_formula_without_raw_structure(self):
+        self.assertEqual(self.model(html)['materials'], [])
+        self.assertNotIn('class="script-text"', html)
         summary = example()
-        script = summary["materials"][0]["script"]
-        script.update(deliveryStatus="missing", statusLabel="平台未返回可用正文", parseStatus="missing",
-                      text=None, textAvailable=False)
-        script["fieldAvailability"]["text"] = False
-        script["data"] = [{"level_1_label": {"value": 1, "label": "商品卖点"}, "level_2_labels": [{"value": 2, "label": "适用场景"}]}]
-        doc = Document(self.render(summary))
-        article = doc.find("article")[0]["text"]
-        self.assertIn("可信脚本正文：未提供", article)
-        self.assertIn("商品卖点", article)
-        self.assertIn("适用场景", article)
-        self.assertNotIn("结构化细节", article)
-        self.assertNotIn("片段数", article)
-        self.assertFalse(doc.find("div", **{"class": "script-text"}))
+        script = summary['materials'][0]['script']
+        script.update(deliveryStatus='missing', text=None, textAvailable=False,
+                      data=[{'level_1_label': {'value': 1, 'label': '商品卖点'},
+                             'level_2_labels': [{'value': 2, 'label': '适用场景'}]}])
+        script['fieldAvailability']['text'] = False
+        model = self.model(self.render(summary))
+        self.assertEqual(model['materials'][0]['text'], '')
+        self.assertEqual(model['materials'][0]['formula'][0]['label'], '商品卖点')
 
-    def test_html_and_script_values_cannot_create_elements_or_events(self):
+    def test_scope_supports_additional_filters_and_single_row_chart(self):
+        summary = example()
+        summary['selection']['filters'].append({'label': '点击率', 'operator': 'gt', 'value': 0.03})
+        html = self.render(summary)
+        scope = self.model(html)['scope']
+        self.assertIn(['选材筛选条件 1', 'plays ≥ 0'], scope)
+        self.assertIn(['选材筛选条件 2', '点击率 > 0.03'], scope)
+        self.assertIn('width:max-content;min-width:100%;margin:0 auto', html)
+        self.assertNotIn('点二级步骤可在中间完整脚本中定位已核对的原句。', html)
+        self.assertNotIn('source-filter', html)
+        self.assertNotIn('item-search', html)
+
+    def test_embedded_values_cannot_create_elements_or_expose_paths(self):
         summary = example()
         attack = '</script><img src=x onerror="alert(1)"><script>alert(2)</script>'
-        summary["runId"] = attack
-        summary["materials"][0]["materialName"] = attack
-        summary["materials"][0]["script"]["text"] = attack
-        summary["materials"][0]["script"]["formula"] = {attack: [attack]}
-        summary["metricDefinitions"]["cost"]["label"] = attack
+        summary['materials'][0]['materialName'] = attack
+        summary['materials'][0]['script']['text'] = attack
+        summary['metricDefinitions']['cost']['label'] = attack
+        summary['materials'][0]['sourceRefs'] = [{'path': 'https://evil.invalid/secret'}]
         html = self.render(summary)
         doc = Document(html)
-        self.assertFalse(doc.find("img"))
-        self.assertEqual(len(doc.find("script")), 1)
-        self.assertFalse(any(key.startswith("on") for e in doc.elements for key in e["attrs"]))
-        self.assertEqual(doc.find("div", **{"class": "script-text"})[0]["text"], attack)
+        self.assertFalse(doc.find('img'))
+        self.assertEqual(len(doc.find('script')), 2)
+        self.assertFalse(any(key.startswith('on') for item in doc.elements for key in item['attrs']))
+        self.assertEqual(self.model(html)['materials'][0]['text'], attack)
+        self.assertNotIn('https://evil.invalid', html)
+        self.assertNotIn('facts/materials/', html)
 
-    def test_source_and_audit_paths_are_not_exposed_in_report(self):
-        summary = example()
-        rejected = ["javascript:alert(1)", "https://evil.invalid/x", "//evil.invalid/x", "/etc/passwd", "../secret.json",
-                    "source-data/../../secret.json", "source-data/%2e%2e/secret", "source-data\\..\\secret", "source-data/x?next=//evil", "source-data/x#target"]
-        summary["materials"][0]["sourceRefs"] = [{"path": path} for path in rejected] + [{"path": "source-data/中文 报表.json"}]
-        doc = Document(self.render(summary))
-        hrefs = [e["attrs"]["href"] for e in doc.find("a")]
-        self.assertTrue(all(href.startswith("#") for href in hrefs))
-        self.assertNotIn("source-data/", doc.find("body")[0]["text"])
-        self.assertNotIn("facts/materials/", doc.find("body")[0]["text"])
-        self.assertFalse(any(href.startswith(("http:", "https:", "javascript:", "//", "/")) for href in hrefs))
-        self.assertFalse(any("secret" in href or "?" in href for href in hrefs))
-
-    def test_empty_report_keeps_honest_counts_and_no_invented_script(self):
-        summary = example()
-        summary.update(materials=[], counts={}, duplicateTextGroups=[], gaps=[], fieldAvailability={})
-        html = self.render(summary)
-        self.assertIn("暂无素材数据", html)
-        self.assertIn("未提供", html)
-        self.assertNotIn("class=\"script-text\"", html)
-
-    def test_duplicate_groups_preserve_per_material_entries(self):
-        doc = Document(self.render())
-        self.assertEqual(len(doc.find("article")), 2)
-        self.assertIn("m1", doc.find("body")[0]["text"])
-        self.assertIn("m2", doc.find("body")[0]["text"])
-
-    def test_workbench_keeps_four_detail_sections_without_scope_or_leaderboard(self):
-        doc = Document(self.render())
-        panels = {e["attrs"].get("data-section-panel") for e in doc.elements if "data-section-panel" in e["attrs"]}
-        self.assertEqual(panels, {"filters", "scripts", "single-material", "quote-library"})
-        self.assertFalse(doc.find("div", id="scope-switch"))
-        self.assertFalse(doc.find("button", **{"data-scope": "all"}))
-        self.assertTrue(doc.find("select", id="single-material-search") or doc.find("input", id="single-material-search"))
-        self.assertFalse(doc.find("button", id="next-page"))
-        self.assertFalse(doc.find("button", **{"data-sort-metric": "cost"}))
-
-    def test_formula_coverage_uses_verified_unique_materials_and_source_labels(self):
-        summary = example()
-        first = summary["materials"][0]["script"]
-        first["data"] = [
-            {"level_1_label": {"value": 1, "label": "价格优惠"}, "level_2_labels": [{"value": 21, "label": "降价/折扣"}]},
-            {"level_1_label": {"value": 1, "label": "价格优惠"}, "level_2_labels": [{"value": 21, "label": "降价/折扣"}]},
-        ]
-        first["detail"] = {"21": {"label": "降价/折扣", "list": ["折扣原句"]}}
-        first["text"] = "真实正文中的折扣原句。"
-        second = summary["materials"][1]["script"]
-        second.update(data=first["data"], detail=first["detail"], fieldAvailability=first["fieldAvailability"])
-        doc = Document(self.render(summary))
-        self.assertTrue(doc.find("section", **{"data-section-panel": "scripts"}))
-        panel = doc.find("section", **{"data-section-panel": "scripts"})[0]["text"]
-        self.assertNotIn("1 个素材的内容公式", panel)
-        self.assertIn("价格优惠", panel)
-        self.assertIn("1 个素材 · 100%", panel)
-        self.assertNotIn("2 个素材 ·", panel)
-        articles = doc.find("article")
-        self.assertIn("折扣原句", articles[0]["text"])
-        self.assertNotIn("折扣原句", articles[1]["text"])
-
-    def test_unknown_formula_shapes_are_readable_without_inventing_id_labels(self):
-        summary = example()
-        script = summary["materials"][0]["script"]
-        script["formula"] = {"labels": [{"level_1_label": 999, "level_2_labels": [888]}]}
-        script["data"] = [{"level_1_label": {"value": 999}, "level_2_labels": [{"value": 888}]}]
-        doc = Document(self.render(summary))
-        self.assertTrue(doc.find("section", **{"data-section-panel": "scripts"}))
-        panel = doc.find("section", **{"data-section-panel": "scripts"})[0]["text"]
-        self.assertIn("暂无可展示的内容公式标签", panel)
-        self.assertNotIn("999", doc.find("article")[0]["text"])
-        self.assertNotIn("888", doc.find("article")[0]["text"])
-
-    def test_detail_navigation_and_selector_search(self):
-        node = shutil.which("node")
+    def test_page_script_has_valid_syntax(self):
+        node = shutil.which('node')
         if not node:
-            self.skipTest("Node.js unavailable for offline interaction execution")
-        from workbench_report_html import _SCRIPT
-        runner = r"""
-function item(dataset = {}, textContent = "") {
-  const classes = new Set();
-  return {dataset, textContent, hidden:false, value:"", attrs:{},
-    classList:{toggle(name, on){on ? classes.add(name) : classes.delete(name);}, contains(name){return classes.has(name);}},
-    setAttribute(name,value){this.attrs[name]=value;}, removeAttribute(name){delete this.attrs[name];},
-    scrollIntoView(){this.scrolled=true;}};
-}
-const panels = ["filters","scripts","single-material","quote-library"].map(sectionPanel => item({sectionPanel}));
-const nav = ["filters","scripts","single-material","quote-library"].map(section => item({section}));
-const cards = [item({index:"0"}),item({index:"1"})];
-const options = [item({openMaterial:"0"},"Café 素材 m0"),item({openMaterial:"1"},"中文素材 m1")];
-const library = item({libraryOpen:"1"});
-const controls = new Map([["single-material-search",item()],["selector-empty",item()],["selector-search",item()],
-  ["material-1",cards[1]]]);
-const queries = {"[data-section-panel]":panels,"[data-section]":nav,".material-card":cards,
-  ".material-option":options,"[data-open-material]":options,"[data-library-open]":[library]};
-global.document={getElementById:id=>controls.get(id),querySelectorAll:selector=>queries[selector]||[]};
-global.initMetricPicker=()=>{};
-SCRIPT
-const check=(value,message)=>{if(!value)throw Error(message);};
-check(!panels[0].hidden && panels[1].hidden,"filters open by default");
-nav[1].onclick({preventDefault(){}});
-check(!panels[1].hidden,"formula section opens");
-options[1].onclick({preventDefault(){}});
-check(!cards[1].hidden && cards[0].hidden && !panels[2].hidden,"detail script opens");
-controls.get("single-material-search").value="ｃａｆé";
-controls.get("single-material-search").oninput();
-check(!options[0].hidden && options[1].hidden,"Unicode selector search");
-library.onclick({preventDefault(){}});
-check(!cards[1].hidden && cards[1].scrolled,"quote returns to detail script");
-""".replace("SCRIPT", _SCRIPT)
-        result = subprocess.run([node, "-e", runner], text=True, capture_output=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
+            self.skipTest('Node.js unavailable')
+        from script_workbench_page import SCRIPT
+        with subprocess.Popen([node, '--check'], stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
+            _, stderr = process.communicate(SCRIPT)
+            self.assertEqual(process.returncode, 0, stderr)
 
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

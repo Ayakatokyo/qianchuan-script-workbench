@@ -1,6 +1,7 @@
 """Full-snapshot leaderboard must not widen the accepted script/analysis scope."""
 import hashlib
 import json
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -53,15 +54,18 @@ class FullLeaderboardTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             run = synthetic_run(Path(directory)); snapshot(run)
             summary, _, _ = build_summary(run)
-            doc = Document(render_html(summary))
+            html = render_html(summary)
+            doc = Document(html)
+            model = json.loads(re.search(r'<script id="workbench-model" type="application/json">(.*?)</script>', html).group(1))
             rows = doc.find('tr', **{'class': 'material-row'})
             self.assertEqual(len(rows), 0)
             self.assertNotIn('素材4', doc.find('body')[0]['text'])
-            self.assertEqual(len(doc.find('article')), 2)
+            self.assertEqual(len(model['materials']), 2)
             self.assertNotIn('筛选条件与排序字段', doc.find('body')[0]['text'])
             self.assertEqual(len(doc.find('dialog')), 1)
-            self.assertIn('unmapped_new_metric', doc.find('dialog')[0]['text'])
-            self.assertNotIn('https://private.invalid', render_html(summary))
+            self.assertTrue(any(field['id'] == 'unmapped_new_metric'
+                                for item in model['materials'] for field in item['metrics']))
+            self.assertNotIn('https://private.invalid', html)
 
     def test_altered_snapshot_fails_instead_of_showing_unverified_full_rows(self):
         with tempfile.TemporaryDirectory() as directory:
