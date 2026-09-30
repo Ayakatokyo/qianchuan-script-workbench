@@ -119,7 +119,7 @@ class FieldRegistry:
 
     def resolve_query(self, spec: Mapping[str, Any] | None) -> "MaterialQuery":
         spec = dict(spec or {})
-        sort_field = spec.get("sortField") or spec.get("field") or "整体千次展现费用"
+        sort_field = spec.get("sortField") or spec.get("field") or "整体消耗"
         try:
             sort_entry = self.require(sort_field)
         except QueryError as exc:

@@ -64,6 +64,7 @@ def report_record(material_id: str = "material-1") -> dict:
         },
         "metrics": {
             "stat_cost_for_overall_roi2": {"Value": 12, "ValueStr": "12"},
+            "stat_cost_for_roi2": {"Value": 10, "ValueStr": "10"},
             "total_ecpm_for_roi2": {"Value": 8, "ValueStr": "8"},
         },
     }
@@ -237,7 +238,7 @@ class IntakeAndLiveContractTests(unittest.TestCase):
     def test_file_result_is_downloaded_and_parsed_before_source_pack(self):
         fixture = ('recordType\x01materialId\x01materialName\x01scriptInfo\n'
                    '\x02script_analysis\x01m-1\x01sample-name\x01{"text":"原始参考脚本"}\n').encode()
-        report = [{"materialId": "m-1", "materialName": "sample-name", "rank": 1, "metrics": {"综合成本": "1", "千次曝光成本": "1"}, "sourceRefs": ["report:m-1"]}]
+        report = [{"materialId": "m-1", "materialName": "sample-name", "rank": 1, "metrics": {"综合成本": "1", "整体消耗": "1", "千次曝光成本": "1"}, "sourceRefs": ["report:m-1"]}]
 
         class Report:
             def fetch_material_report(self, _request, _output_dir):

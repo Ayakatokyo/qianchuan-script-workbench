@@ -162,6 +162,27 @@ class Batch3AcquisitionPipelineTests(unittest.TestCase):
             {"materialId": "m3", "materialName": "name-m3", "rank": 3, "metrics": {"综合成本": "8"}, "sourceRefs": ["report:m3"]},
         ]
 
+    def test_blank_selection_uses_overall_spend_for_rpa_targets(self):
+        rows = copy.deepcopy(self.candidates[:2])
+        rows[0]["metrics"].update({"整体消耗": "5", "整体千次展现费用": "100"})
+        rows[1]["metrics"].update({"整体消耗": "20", "整体千次展现费用": "1"})
+        for mode in ("omitted", "empty", "null"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                live = {"apiShop": "shop-A", "advertiserId": "1770096415226951",
+                        "rpaShop": "rpa-C", "topN": 1}
+                if mode != "omitted":
+                    live["materialFilterSort"] = {} if mode == "empty" else None
+                request = AcquisitionRequest.from_dict({"liveAcquire": live,
+                    "period": {"startDate": "2026-09-01", "endDate": "2026-09-07"}})
+                rpa = RecordingRpaGateway({"m2": "completed"})
+                output = Path(directory)
+                acquire_scripts(request, output, RecordingReportGateway(rows), rpa)
+                selection = json.loads((output / "material-selection.json").read_text())
+                self.assertEqual(selection["ranking"]["fieldId"], "stat_cost_for_roi2")
+                self.assertEqual(selection["ranking"]["direction"], "desc")
+                self.assertEqual(selection["filters"], [])
+                self.assertEqual(rpa.submitted_material_ids, ["m2"])
+
     def test_successful_acquisition_preserves_hashes_and_deduplicates_text(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)

@@ -10,7 +10,7 @@
 | `rpa_shop` | `liveAcquire.rpaShop` | `rpa_shop` 选择器，`application_id: RPA_JULIANG_QC`、`value_format: both`；与 API 店铺分域，广告主由实时授权关系解析 |
 | `date_range` | `period.startDate/endDate` | `YYYY-MM-DD`，`max_policy: t_plus_2`，北京时间前天及以前，开始不晚于结束 |
 | `top_n` | `liveAcquire.topN` | 正整数，默认 10；只控制本地选材数量，不截断完整报表 |
-| `material_filter_sort` | `liveAcquire.materialFilterSort` | 可选，归一化为已注册字段的排序与 filters；仅作用于完整报表后的本地选材 |
+| `material_filter_sort` | `liveAcquire.materialFilterSort` | 可选；未填写条件时不加筛选，默认按整体消耗（`stat_cost_for_roi2`）降序；归一化为已注册字段的排序与 filters；仅作用于完整报表后的本地选材 |
 
 完整快照保留平台返回的所有报表行。本地筛选后、取 TopN 前，将 `roi2_material_video_type.Value=4` 或类型展示含 AIGC 的聚合行排除；平台结构化 `material_id` 非正数字、展示值 `-` 以及负数哨兵 ID 也不可作为详情 RPA 目标。排除原因与原行号写入 `material-selection.json.excludedRows`；有效候选按原排序补足 TopN，普通智能优选视频不因类型被排除。过滤不改用户条件、报表 API 请求或全量榜单。
 
