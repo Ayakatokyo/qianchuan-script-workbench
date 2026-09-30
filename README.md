@@ -59,3 +59,5 @@ python "$SKILL_ROOT/scripts/run.py" analysis-status --analysis-root "$ANALYSIS_R
 ```
 
 登记前重新核对分析结果、来源及交接哈希；文件交付支持 `index.html`、`report.md` 或 `report.txt`，分别用 `--format html|markdown|text`。登记时检查正文非空、HTML/CSS/Markdown 本地资源可用且不越出该版目录，记录输入及每个输出文件 SHA-256。`deliveryStatus=completed`、`reportVerified=true` 表示本地文件通过完整性校验，不代替事实解释、视觉观感或用户验收。展示修改在同一分析下新增递增的四位 revision，旧文件和旧收据保持不变；涉及新事实的实质修订先用既有事实读取与选择路径核验，并更新相应审计结果或建立新分析，无需重跑采集。旧版无 revision 的宿主 HTML 可继续校验。历史固定报告的 v1 收据只读核验，标为 `legacy_completed`。阶段一固定素材汇总报告不变。宿主报告制作耗时单独记录。
+
+执行流程增加 `describe-analysis` 字段概览、`analysis-page --end-page` 连续分页及只读 `check-analysis-result`；预检不替代正式发布或报告验收。使用方式与边界见 SKILL 和输出契约。

@@ -79,12 +79,17 @@ def verify_pages(root):
     return index
 
 
-def read_page(root, number):
-    index = verify_pages(root)
-    if number < 1 or number > len(index["pages"]):
+def read_page(root, number, end_number=None, *, verified_index=None):
+    index = verified_index if verified_index is not None else verify_pages(root)
+    last = number if end_number is None else end_number
+    if number < 1 or last < number or last > len(index["pages"]):
         raise ValueError("page outside analysis handoff")
-    page = read(local_file(root, index["pages"][number-1]["path"]))
-    return {**page, "pageCount": len(index["pages"]), "nextPage": number+1 if number < len(index["pages"]) else None}
+    pages = [read(local_file(root, item["path"])) for item in index["pages"][number-1:last]]
+    if end_number is None:
+        return {**pages[0], "pageCount": len(index["pages"]), "nextPage": last+1 if last < len(index["pages"]) else None}
+    return {"identity": index["identity"], "startPage": number, "endPage": last,
+            "pages": pages, "pageCount": len(index["pages"]),
+            "nextPage": last+1 if last < len(index["pages"]) else None}
 
 
 class _LocalAssets(HTMLParser):
@@ -280,3 +285,27 @@ def timed_phase(name):
                         target.write(json.dumps(event, ensure_ascii=False) + "\n")
         return wrapped
     return decorate
+
+
+def field_summary(field, values, *, label=None):
+    """Bounded examples for field discovery; never a substitute for complete evidence."""
+    present = [(identity, value) for identity, value, available in values if available]
+    def kind(value):
+        if isinstance(value, bool):
+            return "boolean"
+        if isinstance(value, dict):
+            return "object"
+        if isinstance(value, list):
+            return "array"
+        if isinstance(value, (int, float)):
+            return "number"
+        if isinstance(value, str):
+            return "string"
+        return "null"
+    samples = []
+    for identity, value in present[:1]:
+        preview = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        samples.append({"materialId": identity, "preview": preview[:180], "truncated": len(preview) > 180,
+                        "keys": list(value)[:12] if isinstance(value, dict) else None})
+    return {"field": field, "label": label, "recordCount": len(values), "availableCount": len(present),
+            "valueTypes": sorted({kind(value) for _, value in present}), "samples": samples}

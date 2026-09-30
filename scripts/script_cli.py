@@ -43,7 +43,7 @@ from qianchuan_script_acquisition_verified_run import import_verified_run
 from qianchuan_script_acquisition_receipt import atomic_json
 from script_creation_contracts import validate_payload
 from script_creation_session import prepare_generation, prepare_rewrite, publish_generation, publish_rewrite
-from workbench_analysis import prepare_analysis, publish_analysis, verify_analysis
+from workbench_analysis import prepare_analysis, publish_analysis, verify_analysis, describe_analysis, check_analysis_result
 from workbench_analysis import register_analysis_report, analysis_delivery_status, verified_analysis_page
 from workbench_reporting import WorkbenchError, render_summary, verify_handoff
 
@@ -51,7 +51,7 @@ from workbench_reporting import WorkbenchError, render_summary, verify_handoff
 _IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _SKILL_ROOT = Path(__file__).resolve().parents[1]
 
-_ALL_COMMANDS = {"analysis-page", "analysis-status", "register-analysis-report", "describe-acquire", "preview-acquire", "acquire", "continue-acquire", "import-run", "render-summary", "prepare-analysis", "publish-analysis", "prepare-generation", "publish-generation", "prepare-rewrite", "publish-rewrite", "verify"}
+_ALL_COMMANDS = {"describe-analysis", "check-analysis-result", "analysis-page", "analysis-status", "register-analysis-report", "describe-acquire", "preview-acquire", "acquire", "continue-acquire", "import-run", "render-summary", "prepare-analysis", "publish-analysis", "prepare-generation", "publish-generation", "prepare-rewrite", "publish-rewrite", "verify"}
 _ALLOWED_COMMANDS = set(globals().get("_ALLOWED_COMMANDS", _ALL_COMMANDS))
 
 
@@ -1118,6 +1118,14 @@ def _verify(args: argparse.Namespace) -> dict[str, Any]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="short-video-script")
     commands = parser.add_subparsers(dest="command", required=True)
+    if "describe-analysis" in _ALLOWED_COMMANDS:
+        command = commands.add_parser("describe-analysis", help="inspect verified field types, coverage and bounded examples without writing an analysis")
+        command.add_argument("--run-dir", required=True, type=Path)
+        command.add_argument("--field", action="append", help="repeat to inspect particular script fields or metric IDs")
+    if "check-analysis-result" in _ALLOWED_COMMANDS:
+        command = commands.add_parser("check-analysis-result", help="run publication gates without publishing or changing analysis state")
+        command.add_argument("--analysis-root", required=True, type=Path)
+        command.add_argument("--result", required=True, type=Path)
     for name in ("analysis-page", "analysis-status", "register-analysis-report"):
         if name not in _ALLOWED_COMMANDS:
             continue
@@ -1125,6 +1133,7 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--analysis-root", required=True, type=Path)
         if name == "analysis-page":
             command.add_argument("--page", required=True, type=int)
+            command.add_argument("--end-page", type=int, help="read an inclusive page range with one source verification")
         if name == "register-analysis-report":
             command.add_argument("--revision")
             command.add_argument("--format", choices=("html", "markdown", "text"))
@@ -1205,7 +1214,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
     handlers = {
-        "analysis-page": lambda a: verified_analysis_page(a.analysis_root, a.page),
+        "describe-analysis": lambda a: describe_analysis(_external_run_dir(a.run_dir), a.field),
+        "check-analysis-result": lambda a: check_analysis_result(a.analysis_root, a.result),
+        "analysis-page": lambda a: verified_analysis_page(a.analysis_root, a.page, a.end_page),
         "analysis-status": lambda a: analysis_delivery_status(a.analysis_root),
         "register-analysis-report": lambda a: register_analysis_report(a.analysis_root, a.revision, a.format),
         "describe-acquire": _describe_acquire,

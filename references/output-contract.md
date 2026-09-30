@@ -84,3 +84,19 @@ python "$SKILL_ROOT/scripts/run.py" analysis-status --analysis-root "$ANALYSIS_R
 ```
 
 登记前重新核对分析结果、来源及交接哈希；文件交付支持 `index.html`、`report.md` 或 `report.txt`，分别用 `--format html|markdown|text`。登记时检查正文非空、HTML/CSS/Markdown 本地资源可用且不越出该版目录，记录输入及每个输出文件 SHA-256。`deliveryStatus=completed`、`reportVerified=true` 表示本地文件通过完整性校验，不代替事实解释、视觉观感或用户验收。展示修改在同一分析下新增递增的四位 revision，旧文件和旧收据保持不变；涉及新事实的实质修订先用既有事实读取与选择路径核验，并更新相应审计结果或建立新分析，无需重跑采集。旧版无 revision 的宿主 HTML 可继续校验。历史固定报告的 v1 收据只读核验，标为 `legacy_completed`。阶段一固定素材汇总报告不变。宿主报告制作耗时单独记录。
+
+## 执行流程优化（2026-09-30）
+
+写分析计划前优先使用 `describe-analysis`，一次核对字段类型、可用数量和有来源的短样例；`--field` 可重复指定候选字段。样例用于选型，不作为正文或引用依据，完整文本仍从事实分页读取。不要仅凭字段名假定 `formula`、`detail`、`data` 的实际结构，也不要反复打印整个事实包。
+
+```bash
+python "$SKILL_ROOT/scripts/run.py" describe-analysis --run-dir "$RUN_DIR"
+python "$SKILL_ROOT/scripts/run.py" analysis-page --analysis-root "$ANALYSIS_ROOT" --page 1 --end-page 4
+python "$SKILL_ROOT/scripts/run.py" check-analysis-result --analysis-root "$ANALYSIS_ROOT" --result "$RESULT_JSON"
+```
+
+连续分页复用一次来源校验，保留完整原文与原始记录引用；按实际需要读取页范围，不一次展开全榜。`check-analysis-result` 为只读预检，复用正式发布的身份、输入哈希、字段与来源等门禁，不推进状态、不写回执或运行日志。仍需修正错误并正式发布；已预检通过不代表结果已发布。正式发布仍重新核验，不能用预检替代。
+
+文件写入及其依赖命令串行执行，确认写入完成后再读取、导入或发布。首次调用前检查 Python 与 requirements 依赖，缺失时按包内依赖安装；已有环境不重复安装。以命令业务输出的 `execution.wallSeconds` 或 `command_completed.wallSeconds` 判断耗时，异步任务还须取得终态，不将 Bash 的短等待窗口当总耗时。成功入口已有校验时不紧接重复全量 `verify`；失败诊断、产物变化或专项审计再运行。
+
+报告内容与样式仍由宿主自由组织。本轮不加入章节顺序或人群展示/分析要求。制作 HTML 时，在登记前检查最终交付目录的资源、脚本初始化与主要内容；具备渲染工具时实际打开交付入口，辅助区块错误局部显示可读缺口，业务主体缺失须修复后交付。截图、校验脚本与调试输出保存在交付目录之外；完成检查后再登记回执，登记后不增加或修改文件。声明已验证须区分文件完整性与实际渲染，不把资源/哈希校验通过当作页面验收通过。

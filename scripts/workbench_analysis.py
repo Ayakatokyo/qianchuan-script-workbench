@@ -12,7 +12,7 @@ from qianchuan_script_acquisition_receipt import atomic_json
 from script_creation_contracts import validate_payload
 from workbench_reporting import WorkbenchError, verify_handoff
 from qianchuan_script_acquisition_fact_pack import bind_report_metric_sources
-from analysis_delivery import prepare_pages, read_page, verify_pages, register_host_report, verify_delivery, has_report_receipt, timed_phase, write
+from analysis_delivery import prepare_pages, read_page, verify_pages, register_host_report, verify_delivery, has_report_receipt, timed_phase, write, field_summary
 
 
 _IDENTITY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -65,6 +65,48 @@ def _selected_materials(pack: Mapping[str, Any], plan: Mapping[str, Any]) -> lis
             raise WorkbenchError("material_out_of_scope", "analysis plan selects materials outside this source pack: " + ", ".join(sorted(outside)))
         chosen = [item for item in materials if str(item.get("materialId")) in wanted]
     return sorted(chosen, key=lambda item: (item.get("rank", 0), str(item.get("materialId", ""))))
+
+
+def describe_analysis(run_dir: Path, fields: list[str] | None = None) -> dict[str, Any]:
+    """Describe actual verified field shapes before the host writes an analysis plan."""
+    run_dir = Path(run_dir).expanduser().resolve()
+    handoff, pack, _ = verify_handoff(run_dir)
+    try:
+        pack = bind_report_metric_sources(pack, run_dir)
+    except (ValueError, OSError) as exc:
+        raise WorkbenchError("metric_source_invalid", str(exc)) from exc
+    registry = _registry_fields()
+    wanted = fields or [*_SCRIPT_FIELDS, *registry]
+    unknown = set(wanted) - {*_SCRIPT_FIELDS, *registry}
+    if unknown:
+        raise WorkbenchError("unknown_analysis_field", ", ".join(sorted(unknown)))
+    scripts = {str(item["materialId"]): item for item in pack.get("scripts", [])}
+    descriptions = []
+    for field in wanted:
+        values = []
+        for material in pack.get("materials", []):
+            mid = str(material["materialId"])
+            script = scripts.get(mid, {})
+            if field in _SCRIPT_FIELDS:
+                value = script.get(field)
+                if field == "text" and value is None:
+                    value = script.get("rawText")
+                completeness = script.get("completeness") or {}
+                available = bool(completeness.get(_SCRIPT_FIELD_COMPLETENESS[field],
+                                 field == "text" and script.get("parseStatus") == "parsed"))
+                available = available and value is not None and bool(_source_refs_for_script(script, field))
+            else:
+                source_key = registry[field].get("sourceKey") or field
+                value = material.get("metrics", {}).get(source_key)
+                references = material.get("metricSourceRefs")
+                refs = references.get(source_key, []) if isinstance(references, Mapping) else material.get("sourceRefs", [])
+                available = value is not None and bool(refs)
+            values.append((mid, value, available))
+        descriptions.append(field_summary(field, values, label=registry.get(field, {}).get("label")))
+    return {"runId": run_dir.name, "analysisAllowed": handoff.get("analysisAllowed"),
+            "acquisitionState": handoff.get("acquisitionState"), "fields": descriptions,
+            "externalCalls": False, "nextAction": "prepare-analysis",
+            "guidance": "样例仅供字段选型；正文与证据读取完整事实分页。按实际结构选择 formula/detail/data，不凭字段名推断含义。"}
 
 
 def _source_refs_for_script(script: Mapping[str, Any], field: str) -> list[str]:
@@ -365,8 +407,7 @@ def _render_analysis_report(result: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
-@timed_phase("publish_analysis")
-def publish_analysis(analysis_dir: Path, result_path: Path) -> dict[str, Any]:
+def _publish_analysis(analysis_dir: Path, result_path: Path, *, check_only: bool = False) -> dict[str, Any]:
     analysis_dir = Path(analysis_dir).expanduser().resolve()
     run_dir = analysis_dir.parent.parent.resolve()
     status_path = analysis_dir / "status.json"
@@ -404,6 +445,10 @@ def publish_analysis(analysis_dir: Path, result_path: Path) -> dict[str, Any]:
     final_result = dict(result)
     final_result["status"] = "completed"
     validate_payload(final_result, "script-analysis-result.schema.json")
+    if check_only:
+        return {"status": "validated", "checkOnly": True, "analysisId": analysis_dir.name,
+                "conclusionCount": len(final_result.get("conclusions", [])),
+                "nextAction": "publish-analysis", "published": False}
     report = _render_analysis_report(final_result)
     outputs = {
         "analysis-result.json": json.dumps(final_result, ensure_ascii=False, indent=2) + "\n",
@@ -440,6 +485,16 @@ def publish_analysis(analysis_dir: Path, result_path: Path) -> dict[str, Any]:
             "outputPath": str(analysis_dir / "analysis-result.json")}
 
 
+@timed_phase("publish_analysis")
+def publish_analysis(analysis_dir: Path, result_path: Path) -> dict[str, Any]:
+    return _publish_analysis(analysis_dir, result_path)
+
+
+def check_analysis_result(analysis_dir: Path, result_path: Path) -> dict[str, Any]:
+    """Run the publication gates without changing state, receipts, or timing logs."""
+    return _publish_analysis(analysis_dir, result_path, check_only=True)
+
+
 @timed_phase("register_host_report")
 def register_analysis_report(analysis_dir: Path, revision: str | None = None, report_format: str | None = None) -> dict[str, Any]:
     root = Path(analysis_dir).resolve()
@@ -474,9 +529,9 @@ def analysis_delivery_status(analysis_dir: Path) -> dict[str, Any]:
             "nextAction": "read_analysis_pages" if status["state"] == "awaitingModel" else ("deliver_report" if report else "create_and_register_host_report")}
 
 
-def verified_analysis_page(analysis_dir: Path, page: int) -> dict[str, Any]:
+def verified_analysis_page(analysis_dir: Path, page: int, end_page: int | None = None) -> dict[str, Any]:
     verify_analysis(Path(analysis_dir))
-    return read_page(analysis_dir, page)
+    return read_page(analysis_dir, page, end_page)
 
 
 def verify_analysis(analysis_dir: Path) -> list[str]:

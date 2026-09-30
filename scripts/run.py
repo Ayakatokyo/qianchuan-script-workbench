@@ -10,7 +10,7 @@ def main():
         raise SystemExit("Skill runtime scripts are missing; install the complete package.")
     sys.path.insert(0, str(source))
     runpy.run_module("script_cli", run_name="__main__", init_globals={"_ALLOWED_COMMANDS": {
-        "describe-acquire", "preview-acquire", "acquire", "continue-acquire", "import-run",
+        "describe-acquire", "describe-analysis", "check-analysis-result", "preview-acquire", "acquire", "continue-acquire", "import-run",
         "render-summary", "prepare-analysis", "publish-analysis",
         "analysis-page", "analysis-status", "register-analysis-report",
         "prepare-generation", "publish-generation", "prepare-rewrite", "publish-rewrite", "verify",
