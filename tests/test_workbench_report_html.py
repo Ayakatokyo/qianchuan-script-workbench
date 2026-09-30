@@ -98,7 +98,7 @@ class WorkbenchReportHtmlTests(unittest.TestCase):
         self.assertNotIn('来源原句', html)
         self.assertNotIn('脚本片段库', html)
         self.assertNotIn('查找名称或 ID', html)
-        self.assertFalse(doc.find('nav'))
+        self.assertEqual([node['attrs'].get('id') for node in doc.find('nav')], ['quote-pagination'])
         self.assertFalse(doc.find('table'))
         self.assertEqual(len(doc.find('dialog')), 1)
 
