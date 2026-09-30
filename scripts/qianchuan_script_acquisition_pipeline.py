@@ -16,6 +16,7 @@ from qianchuan_script_acquisition_identity import audit_identity, content_eviden
 from qianchuan_script_acquisition_gate import FirstBatchCsvGate, GATE_FILENAME, assert_detail_rpa_not_paused
 from qianchuan_script_acquisition_contracts import AcquisitionRequest
 from qianchuan_script_acquisition_fact_pack import build_source_pack, extract_script_content, normalize_text, script_completeness
+from detail_record_facts import index_attempt
 from qianchuan_script_acquisition_field_registry import FieldRegistry, load_field_registry
 from qianchuan_script_acquisition_csv_parser import RpaCsvError, parse_diagnosis_csv
 from qianchuan_script_acquisition_receipt import atomic_json, write_receipt, write_status
@@ -910,6 +911,9 @@ def acquire_scripts(
                             hard_stop = True
                             stop_reason = gate.payload["errorCode"]
                     script_facts[material_id] = processed["scriptFact"]
+                    detail_index = index_attempt(output_dir, material_id, current_attempt)
+                    if detail_index:
+                        script_facts[material_id]["detailSource"] = detail_index
                     # A later transport/local failure must not lose earlier
                     # quarantined evidence from this material's source chain.
                     script_facts[material_id]["sourceRefs"] = list(dict.fromkeys(

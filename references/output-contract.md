@@ -31,6 +31,28 @@
 
 HTML 不再展示“完整性与缺口”页，以及顶部部分失败、等待第二阶段、“第一阶段仅平台事实”和 `partialFailed` 状态告示。无可用正文时仍显示简短提示；summary、facts、收据、交接和审计记录继续保留结构字段、身份/来源证据、可用性、失败、缺口及等待状态。首批 CSV、身份核对、哈希校验和第二阶段准入均保持原规则，拒收素材不会因简化展示而被采信。
 
+## 详情事实按需分析（2026-09-30）
+
+第一阶段 source pack 新增 `detailSources`：按已通过身份核验的素材保留本次接受的 RPA CSV/records 路径、SHA 与各 recordType 行数，不再只把脚本四字段作为第二阶段可选数据。原始详情字段留在来源文件，source pack 不重复内联全部人群明细；API 指标继续独立绑定报表来源。报告展示及生成/改写参考口径保持原流程。
+
+`describe-analysis` 返回 `detailSources` 索引，供宿主确认实际可选类型。分析计划可选 `detailSelection`；省略时仍只读取所选脚本字段和 API 指标。示例：
+
+```json
+"detailSelection": {
+  "recordTypes": ["crowd_analysis", "interaction_series"],
+  "fields": ["Dimensions", "Metrics", "durationSec", "interactionMetric", "metricValue"],
+  "filters": [],
+  "offsetPerMaterial": 0,
+  "limitPerMaterial": 100
+}
+```
+
+也可选择 `material_info`、`delivery_material_detail` 或来源实际存在的其他记录类型。`fields` 支持对象字段的点路径，省略或为空时保留整条来源记录；必须先核对实际结构。`filters` 每项为 `{field,op,value}`，支持 `eq`、`in`、`gte`、`lte`，条件同时成立；未知或缺失字段不补值。每个素材每种类型默认取 100 行，上限 1000，按原始记录顺序分页。`matchingRecordCount` 是通过解析、条件与选中字段可用性检查的记录行数，不是人数；`returnedRecordCount`、`offset`、`hasMore`、`nextOffset` 明示读取范围。有更多记录时在新的 analysisId 中调整 offset 或缩小条件；不得把页内统计冒充全量分布。
+
+事实切片的 `materials[].detailFields[recordType]` 保留原始值、逐行 sourceRefs、覆盖和缺口。结构化结果引用使用 `field=detailRecord`、`fieldId=recordType`，sourceRefs 必须来自该素材、该类型、该次已选记录；未选类型、缺失字段及来源篡改仍拒绝。人群比例保留来源分母，API/RPA 指标不得静默覆盖；没有可靠口播时间码时，秒级趋势不能归因到某句口播。
+
+旧运行无 detailSources 时，从留存的采集回执、接受的身份审计及 CSV/records 核验后只读绑定来源；不重跑 RPA、不改旧 source pack 或报告。缺少可信采集证据则报告详情缺口。第一阶段报告不自动增加人群/时序板块；宿主仍按业务问题自由组织第二阶段报告。
+
 ## 阶段二：自定义脚本分析
 
 `analysis/<analysisId>/` 写入 `request.json`、`validated-plan.json`、`facts-slice.json`、`model-input.json`、`prompt-snapshot.md`、`prepare-receipt.json` 和 `status.json`。准备态为 `awaitingModel`，operation 固定记录为 `analysis`。所选素材、字段、指标与字段来源均已验证；缺失事实进入 `gaps`，不会猜值或扩大素材范围。

@@ -1,4 +1,4 @@
-"""Build a portable, script-only Qianchuan source pack."""
+"""Build Qianchuan script facts with optional indexed RPA detail sources."""
 
 from __future__ import annotations
 
@@ -192,6 +192,7 @@ def build_source_pack(materials: list[Any], script_facts: Mapping[str, Mapping[s
         "selection": dict(selection),
         "materials": material_payload,
         "scripts": script_payload,
+        "detailSources": [dict(f["detailSource"]) for f in script_facts.values() if f.get("detailSource")],
         "deduplication": {"uniqueScriptCount": len(groups), "groups": list(groups.values())},
         "availability": availability,
         "contentAvailability": content_availability,

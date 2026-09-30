@@ -6,12 +6,23 @@ tags:
 compatibility:
   - content-writing
   - data-analysis
+requires:
+  env:
+    - ENV_BACKEND_HOST
+    - YUCE_AUTHORIZATION
+    - YUCE_SESSION_ID
+    - YCSESSIONID
 market:
   title: "千川素材脚本工作台"
   summary: "取数后先交付可追溯的素材脚本汇总，再由用户决定分析、生成或改写。"
   category:
     key: short_video_content
     label: 短视频内容
+  icon: assets/icon.png
+  cover: assets/cover.png
+  sop:
+    title: 千川素材脚本工作台说明书V4.0
+    url: https://sample-cube.yuce-tech.cn/api/v1/yucegpt/file_system/view/ws_bfb0d041t5bd9t4f/reports/2026-09-30/%E5%8D%83%E5%B7%9D%E7%B4%A0%E6%9D%90%E8%84%9A%E6%9C%AC%E5%B7%A5%E4%BD%9C%E5%8F%B0%E8%AF%B4%E6%98%8E%E4%B9%A6V4.0/index.html
   badges:
     - label: 千川
       tone: blue
@@ -69,6 +80,7 @@ skill_form:
     type: textarea
     label: 素材筛选与排序
     description: 选填；不填写则不加筛选，默认按整体消耗降序排列；使用 describe-acquire 列出的字段。未知口径会先保存完整报表并等待确认，不启动详情 RPA，也不会自动映射到其他指标。
+    placeholder: "例如：整体消耗 >= 10000，再按净成交 ROI 降序"
     rows: 3
     required: false
 interface:

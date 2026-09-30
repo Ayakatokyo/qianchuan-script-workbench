@@ -260,6 +260,18 @@
     {
       "source": "scripts/analysis_delivery.py",
       "destination": "scripts/analysis_delivery.py"
+    },
+    {
+      "source": "scripts/detail_record_facts.py",
+      "destination": "scripts/detail_record_facts.py"
+    },
+    {
+      "source": "assets/icon.png",
+      "destination": "assets/icon.png"
+    },
+    {
+      "source": "assets/cover.png",
+      "destination": "assets/cover.png"
     }
   ],
   "entrypoint": "scripts/run.py"

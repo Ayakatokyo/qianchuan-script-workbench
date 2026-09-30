@@ -53,6 +53,28 @@ HTML 移除“完整性与缺口”页、顶部运行状态告示、榜单脚本
 
 每次尝试保存原载荷、身份对照及脚本内容/返回身份指纹；恢复成功仅使用通过核对的那次脚本字段。最终仍错配时保持 `partialFailed` 与失败事实，摘要记录“已返回脚本内容，但素材身份不一致，未采信”，并与“平台未返回可用正文”分开。旧记录可从哈希已校验的原始 CSV 只读重算内容存在性与指纹，缺少有效 CSV 时保持未知；不回填或改写旧审计和事实。隔离恢复用于降低疑似并发串扰，不能保证修复连接器内部定位或回填问题。旧终态目录不追加在线重试。
 
+## 详情事实按需分析（2026-09-30）
+
+第一阶段 source pack 新增 `detailSources`：按已通过身份核验的素材保留本次接受的 RPA CSV/records 路径、SHA 与各 recordType 行数，不再只把脚本四字段作为第二阶段可选数据。原始详情字段留在来源文件，source pack 不重复内联全部人群明细；API 指标继续独立绑定报表来源。报告展示及生成/改写参考口径保持原流程。
+
+`describe-analysis` 返回 `detailSources` 索引，供宿主确认实际可选类型。分析计划可选 `detailSelection`；省略时仍只读取所选脚本字段和 API 指标。示例：
+
+```json
+"detailSelection": {
+  "recordTypes": ["crowd_analysis", "interaction_series"],
+  "fields": ["Dimensions", "Metrics", "durationSec", "interactionMetric", "metricValue"],
+  "filters": [],
+  "offsetPerMaterial": 0,
+  "limitPerMaterial": 100
+}
+```
+
+也可选择 `material_info`、`delivery_material_detail` 或来源实际存在的其他记录类型。`fields` 支持对象字段的点路径，省略或为空时保留整条来源记录；必须先核对实际结构。`filters` 每项为 `{field,op,value}`，支持 `eq`、`in`、`gte`、`lte`，条件同时成立；未知或缺失字段不补值。每个素材每种类型默认取 100 行，上限 1000，按原始记录顺序分页。`matchingRecordCount` 是通过解析、条件与选中字段可用性检查的记录行数，不是人数；`returnedRecordCount`、`offset`、`hasMore`、`nextOffset` 明示读取范围。有更多记录时在新的 analysisId 中调整 offset 或缩小条件；不得把页内统计冒充全量分布。
+
+事实切片的 `materials[].detailFields[recordType]` 保留原始值、逐行 sourceRefs、覆盖和缺口。结构化结果引用使用 `field=detailRecord`、`fieldId=recordType`，sourceRefs 必须来自该素材、该类型、该次已选记录；未选类型、缺失字段及来源篡改仍拒绝。人群比例保留来源分母，API/RPA 指标不得静默覆盖；没有可靠口播时间码时，秒级趋势不能归因到某句口播。
+
+旧运行无 detailSources 时，从留存的采集回执、接受的身份审计及 CSV/records 核验后只读绑定来源；不重跑 RPA、不改旧 source pack 或报告。缺少可信采集证据则报告详情缺口。第一阶段报告不自动增加人群/时序板块；宿主仍按业务问题自由组织第二阶段报告。
+
 ## 第二阶段：用户自定义脚本分析
 
 把用户的自然语言目标转成符合 `script-analysis-plan.schema.json` 的计划。计划只能选择本运行中的素材、已落盘的 `formula/detail/data/text` 字段和字段注册表中的指标；不得出现店铺、广告主、日期、TopN、RPA 或重新取数参数。未知字段、素材越界和字段缺失要保留为明确错误或缺口。

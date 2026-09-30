@@ -22,12 +22,12 @@
       "required": ["materialId", "field", "sourceRefs"],
       "properties": {
         "materialId": {"type": "string", "minLength": 1},
-        "field": {"enum": ["formula", "detail", "data", "text", "metric"]},
+        "field": {"enum": ["formula", "detail", "data", "text", "metric", "detailRecord"]},
         "fieldId": {"type": "string"},
         "sourceRefs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
       },
       "allOf": [
-        {"if": {"properties": {"field": {"const": "metric"}}, "required": ["field"]}, "then": {"required": ["fieldId"]}},
+        {"if": {"properties": {"field": {"enum": ["metric", "detailRecord"]}}, "required": ["field"]}, "then": {"required": ["fieldId"]}},
         {"if": {"properties": {"field": {"enum": ["formula", "detail", "data", "text"]}}, "required": ["field"]}, "then": {"not": {"required": ["fieldId"]}}}
       ]
     },
