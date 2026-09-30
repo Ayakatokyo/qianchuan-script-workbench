@@ -1,8 +1,7 @@
 short-description: "先取得并汇总千川素材脚本，再按用户目标分析、生成或改写"
 tags:
   - 千川
-  - 短视频脚本
-  - 脚本分析
+  - 脚本
 compatibility:
   - content-writing
   - data-analysis
